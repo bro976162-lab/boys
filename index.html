@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOYS - Chat</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">BOYS</div>
+
+      <div class="profile">
+        <div class="avatar">B</div>
+        <div>
+          <h3>Bharat</h3>
+          <span>My profile</span>
+        </div>
+      </div>
+
+      <div class="search">
+        <input id="searchInput" type="text" placeholder="Search chats...">
+      </div>
+
+      <div class="chat-list" id="chatList">
+        <button class="chat-item active" data-name="Rahul">
+          <div class="avatar">R</div>
+          <div class="chat-info">
+            <strong>Rahul</strong>
+            <span>Hey! What's up?</span>
+          </div>
+          <small>10:42</small>
+        </button>
+
+        <button class="chat-item" data-name="Amit">
+          <div class="avatar">A</div>
+          <div class="chat-info">
+            <strong>Amit</strong>
+            <span>See you tomorrow</span>
+          </div>
+          <small>09:18</small>
+        </button>
+
+        <button class="chat-item" data-name="Rohan">
+          <div class="avatar">R</div>
+          <div class="chat-info">
+            <strong>Rohan</strong>
+            <span>Photo</span>
+          </div>
+          <small>Yesterday</small>
+        </button>
+      </div>
+    </aside>
+
+    <main class="chat-panel">
+      <header class="chat-header">
+        <div class="user-heading">
+          <div class="avatar" id="headerAvatar">R</div>
+          <div>
+            <h2 id="headerName">Rahul</h2>
+            <span id="onlineStatus">online</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button title="Voice call">📞</button>
+          <button title="Video call">📹</button>
+          <button title="More">⋮</button>
+        </div>
+      </header>
+
+      <section class="messages" id="messages">
+        <div class="message received">
+          <p>Hey! What's up?</p>
+          <span>10:41</span>
+        </div>
+
+        <div class="message sent">
+          <p>All good bro 👍</p>
+          <span>10:42 ✓✓</span>
+        </div>
+      </section>
+
+      <form class="message-box" id="messageForm">
+        <button type="button" class="icon-btn" title="Emoji">😊</button>
+        <button type="button" class="icon-btn" title="Attach">📎</button>
+        <input id="messageInput" type="text" placeholder="Type a message..." autocomplete="off">
+        <button type="button" class="icon-btn mic" title="Voice message">🎤</button>
+        <button type="submit" class="send-btn" title="Send">➤</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
