@@ -1,133 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Mini WhatsApp</title>
-
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOYS - Chat</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <div class="app">
+  <!-- AUTH SCREEN -->
+  <div id="authScreen" class="auth-screen">
 
-        <!-- Sidebar -->
-        <aside class="sidebar">
+    <div class="auth-box">
+      <div class="logo">BOYS</div>
+      <p class="subtitle">Connect with your friends</p>
 
-            <div class="sidebar-header">
-                <h2>Mini WhatsApp</h2>
-                <button id="profileBtn">👤</button>
-            </div>
+      <div class="tabs">
+        <button id="loginTab" class="active">Login</button>
+        <button id="signupTab">Sign Up</button>
+      </div>
 
-            <div class="search-box">
-                <input
-                    type="text"
-                    id="searchInput"
-                    placeholder="Search chats..."
-                >
-            </div>
+      <!-- Signup Name -->
+      <input
+        id="nameInput"
+        type="text"
+        placeholder="Your name"
+        class="signup-only"
+      >
 
-            <div id="chatList" class="chat-list">
+      <input
+        id="emailInput"
+        type="email"
+        placeholder="Email address"
+      >
 
-                <div class="chat-user" data-name="Rahul">
-                    <div class="avatar">R</div>
+      <input
+        id="passwordInput"
+        type="password"
+        placeholder="Password"
+      >
 
-                    <div class="chat-info">
-                        <h3>Rahul</h3>
-                        <p>Hey! What's up?</p>
-                    </div>
+      <button id="authButton" class="auth-button">
+        Login
+      </button>
 
-                    <span class="time">10:30</span>
-                </div>
-
-                <div class="chat-user" data-name="Amit">
-                    <div class="avatar">A</div>
-
-                    <div class="chat-info">
-                        <h3>Amit</h3>
-                        <p>See you tomorrow 👍</p>
-                    </div>
-
-                    <span class="time">09:15</span>
-                </div>
-
-                <div class="chat-user" data-name="Rohan">
-                    <div class="avatar">R</div>
-
-                    <div class="chat-info">
-                        <h3>Rohan</h3>
-                        <p>Good morning!</p>
-                    </div>
-
-                    <span class="time">Yesterday</span>
-                </div>
-
-            </div>
-
-        </aside>
-
-
-        <!-- Chat Area -->
-        <main class="chat-area">
-
-            <header class="chat-header">
-
-                <div class="selected-avatar" id="selectedAvatar">
-                    R
-                </div>
-
-                <div class="selected-user">
-                    <h3 id="selectedName">Rahul</h3>
-                    <p id="onlineStatus">online</p>
-                </div>
-
-                <div class="header-buttons">
-                    <button>📞</button>
-                    <button>⋮</button>
-                </div>
-
-            </header>
-
-
-            <!-- Messages -->
-            <section id="messages" class="messages">
-
-                <div class="message received">
-                    <p>Hey! 👋</p>
-                    <span>10:29</span>
-                </div>
-
-                <div class="message sent">
-                    <p>Hello! How are you?</p>
-                    <span>10:30 ✓✓</span>
-                </div>
-
-            </section>
-
-
-            <!-- Message Input -->
-            <footer class="message-input">
-
-                <button id="emojiBtn">😊</button>
-
-                <input
-                    type="text"
-                    id="messageInput"
-                    placeholder="Type a message..."
-                >
-
-                <button id="sendBtn">➤</button>
-
-            </footer>
-
-        </main>
-
+      <p id="authMessage" class="auth-message"></p>
     </div>
 
+  </div>
 
-    <script src="script.js"></script>
+
+  <!-- MAIN APP -->
+  <div id="app" class="app hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+      <div class="sidebar-header">
+        <div>
+          <h2>BOYS</h2>
+          <span id="myStatus">Offline</span>
+        </div>
+
+        <button id="logoutButton" class="logout-btn">
+          Logout
+        </button>
+      </div>
+
+      <!-- MY PROFILE -->
+      <div class="my-profile">
+        <div class="avatar" id="myAvatar">
+          B
+        </div>
+
+        <div>
+          <strong id="myName">User</strong>
+          <small id="myEmail">email</small>
+        </div>
+      </div>
+
+      <!-- SEARCH -->
+      <div class="search-box">
+        <input
+          id="searchInput"
+          type="text"
+          placeholder="Search users..."
+        >
+      </div>
+
+      <!-- USERS -->
+      <div id="usersList" class="users-list">
+        <p class="loading">Loading users...</p>
+      </div>
+
+    </aside>
+
+
+    <!-- CHAT AREA -->
+    <main class="chat-area">
+
+      <!-- EMPTY CHAT -->
+      <div id="emptyChat" class="empty-chat">
+        <div class="empty-icon">💬</div>
+        <h2>Welcome to BOYS</h2>
+        <p>Select a user to start chatting.</p>
+      </div>
+
+
+      <!-- CHAT -->
+      <div id="chatBox" class="chat-box hidden">
+
+        <!-- CHAT HEADER -->
+        <header class="chat-header">
+
+          <button id="backButton" class="back-btn">
+            ←
+          </button>
+
+          <div class="chat-avatar" id="chatAvatar">
+            U
+          </div>
+
+          <div class="chat-user-info">
+            <strong id="chatName">User</strong>
+            <span id="chatStatus">Offline</span>
+          </div>
+
+        </header>
+
+
+        <!-- MESSAGES -->
+        <div id="messages" class="messages">
+        </div>
+
+
+        <!-- MESSAGE INPUT -->
+        <div class="message-area">
+
+          <input
+            id="messageInput"
+            type="text"
+            placeholder="Type a message..."
+            autocomplete="off"
+          >
+
+          <button id="sendButton">
+            ➤
+          </button>
+
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+
+  <script type="module" src="script.js"></script>
 
 </body>
 </html>
