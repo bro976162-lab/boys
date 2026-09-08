@@ -1,135 +1,175 @@
-const app = document.querySelector(".app");
+import {
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 
-const chatUsers = document.querySelectorAll(".chat-user");
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-const selectedName = document.getElementById("selectedName");
-const selectedAvatar = document.getElementById("selectedAvatar");
-const onlineStatus = document.getElementById("onlineStatus");
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  addDoc,
+  query,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+  updateDoc,
+  limit
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-const messages = document.getElementById("messages");
 
-const messageInput = document.getElementById("messageInput");
-const sendBtn = document.getElementById("sendBtn");
+// ===============================
+// FIREBASE CONFIG
+// ===============================
 
+const firebaseConfig = {
+  apiKey: "AIzaSyCUhCfOlm0fk7omOwqcg7y3xkX77_xDrFI",
+  authDomain: "boys-c950b.firebaseapp.com",
+  projectId: "boys-c950b",
+  storageBucket: "boys-c950b.firebasestorage.app",
+  messagingSenderId: "182409162273",
+  appId: "1:182409162273:web:ed5d49b560e400e889fd60",
+  measurementId: "G-LRCQV0CESH"
+};
+
+
+// ===============================
+// INITIALIZE FIREBASE
+// ===============================
+
+const app = initializeApp(firebaseConfig);
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+
+// ===============================
+// HTML ELEMENTS
+// ===============================
+
+const authScreen = document.getElementById("authScreen");
+const appScreen = document.getElementById("app");
+
+const loginTab = document.getElementById("loginTab");
+const signupTab = document.getElementById("signupTab");
+
+const nameInput = document.getElementById("nameInput");
+const emailInput = document.getElementById("emailInput");
+const passwordInput = document.getElementById("passwordInput");
+
+const authButton = document.getElementById("authButton");
+const authMessage = document.getElementById("authMessage");
+
+const logoutButton = document.getElementById("logoutButton");
+
+const myName = document.getElementById("myName");
+const myEmail = document.getElementById("myEmail");
+const myAvatar = document.getElementById("myAvatar");
+const myStatus = document.getElementById("myStatus");
+
+const usersList = document.getElementById("usersList");
 const searchInput = document.getElementById("searchInput");
 
+const emptyChat = document.getElementById("emptyChat");
+const chatBox = document.getElementById("chatBox");
 
-// SELECT CHAT
+const chatName = document.getElementById("chatName");
+const chatStatus = document.getElementById("chatStatus");
+const chatAvatar = document.getElementById("chatAvatar");
 
-chatUsers.forEach(user => {
+const messagesBox = document.getElementById("messages");
 
-    user.addEventListener("click", () => {
+const messageInput = document.getElementById("messageInput");
+const sendButton = document.getElementById("sendButton");
 
-        const name = user.dataset.name;
+const backButton = document.getElementById("backButton");
 
-        selectedName.textContent = name;
 
-        selectedAvatar.textContent = name.charAt(0);
+// ===============================
+// VARIABLES
+// ===============================
 
-        onlineStatus.textContent = "online";
+let isSignup = false;
+let currentUser = null;
+let currentProfile = null;
+let selectedUser = null;
 
-        app.classList.add("chat-open");
+let usersData = [];
+let unsubscribeUsers = null;
+let unsubscribeMessages = null;
 
-        messageInput.focus();
 
-    });
+// ===============================
+// LOGIN / SIGNUP TAB
+// ===============================
 
+loginTab.addEventListener("click", () => {
+
+  isSignup = false;
+
+  loginTab.classList.add("active");
+  signupTab.classList.remove("active");
+
+  nameInput.classList.add("hidden");
+
+  authButton.textContent = "Login";
+
+  authMessage.textContent = "";
 });
 
 
-// SEND MESSAGE
+signupTab.addEventListener("click", () => {
 
-function sendMessage() {
+  isSignup = true;
 
-    const text = messageInput.value.trim();
+  signupTab.classList.add("active");
+  loginTab.classList.remove("active");
 
-    if (text === "") {
-        return;
-    }
+  nameInput.classList.remove("hidden");
 
-    const message = document.createElement("div");
+  authButton.textContent = "Sign Up";
 
-    message.classList.add("message", "sent");
-
-    const time = new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit"
-    });
-
-    message.innerHTML = `
-        <p>${text}</p>
-        <span>${time} ✓</span>
-    `;
-
-    messages.appendChild(message);
-
-    messageInput.value = "";
-
-    messages.scrollTop = messages.scrollHeight;
-
-    // Demo auto reply
-    setTimeout(() => {
-
-        const reply = document.createElement("div");
-
-        reply.classList.add("message", "received");
-
-        reply.innerHTML = `
-            <p>Okay 👍</p>
-            <span>${time}</span>
-        `;
-
-        messages.appendChild(reply);
-
-        messages.scrollTop = messages.scrollHeight;
-
-    }, 1000);
-}
-
-
-// SEND BUTTON
-
-sendBtn.addEventListener("click", sendMessage);
-
-
-// ENTER KEY
-
-messageInput.addEventListener("keydown", event => {
-
-    if (event.key === "Enter") {
-        sendMessage();
-    }
-
+  authMessage.textContent = "";
 });
 
 
-// SEARCH CHAT
+// ===============================
+// LOGIN / SIGNUP
+// ===============================
 
-searchInput.addEventListener("input", () => {
+authButton.addEventListener("click", async () => {
 
-    const searchText = searchInput.value.toLowerCase();
+  const name = nameInput.value.trim();
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
 
-    chatUsers.forEach(user => {
+  authMessage.textContent = "";
 
-        const name = user.dataset.name.toLowerCase();
+  if (isSignup && name.length < 2) {
 
-        if (name.includes(searchText)) {
-            user.style.display = "flex";
-        } else {
-            user.style.display = "none";
-        }
+    authMessage.textContent = "Please enter your name.";
 
-    });
+    return;
+  }
 
-});
+  if (!email) {
 
+    authMessage.textContent = "Please enter your email.";
 
-// EMOJI BUTTON
+    return;
+  }
 
-document.getElementById("emojiBtn").addEventListener("click", () => {
+  if (password.length < 6) {
 
-    messageInput.value += " 😊";
+    authMessage.textContent =
+      "Password must be at least 6 characters.";
 
-    messageInput.focus();
-
-});
+    return;
