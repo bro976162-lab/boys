@@ -12,23 +12,19 @@ import {
 
 import {
   getFirestore,
-  collection,
   doc,
   setDoc,
   getDoc,
+  collection,
   addDoc,
   query,
   orderBy,
   onSnapshot,
-  serverTimestamp,
-  limit
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 
-// ===============================
-// FIREBASE CONFIG
-// ===============================
-
+// FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyCUhCfOlm0fk7omOwqcg7y3xkX77_xDrFI",
   authDomain: "boys-c950b.firebaseapp.com",
@@ -39,21 +35,12 @@ const firebaseConfig = {
   measurementId: "G-LRCQV0CESH"
 };
 
-
-// ===============================
-// INITIALIZE FIREBASE
-// ===============================
-
 const app = initializeApp(firebaseConfig);
-
 const auth = getAuth(app);
 const db = getFirestore(app);
 
 
-// ===============================
-// HTML ELEMENTS
-// ===============================
-
+// ELEMENTS
 const authScreen = document.getElementById("authScreen");
 const appScreen = document.getElementById("app");
 
@@ -91,28 +78,18 @@ const sendButton = document.getElementById("sendButton");
 
 const backButton = document.getElementById("backButton");
 
-
-// ===============================
-// VARIABLES
-// ===============================
-
-let isSignup = false;
+let signupMode = false;
 let currentUser = null;
-let currentProfile = null;
 let selectedUser = null;
+let allUsers = [];
+let stopUsers = null;
+let stopMessages = null;
 
-let usersData = [];
-let unsubscribeUsers = null;
-let unsubscribeMessages = null;
 
-
-// ===============================
-// LOGIN / SIGNUP TAB
-// ===============================
-
+// LOGIN TAB
 loginTab.addEventListener("click", () => {
 
-  isSignup = false;
+  signupMode = false;
 
   loginTab.classList.add("active");
   signupTab.classList.remove("active");
@@ -120,14 +97,15 @@ loginTab.addEventListener("click", () => {
   nameInput.classList.add("hidden");
 
   authButton.textContent = "Login";
-
   authMessage.textContent = "";
+
 });
 
 
+// SIGNUP TAB
 signupTab.addEventListener("click", () => {
 
-  isSignup = true;
+  signupMode = true;
 
   signupTab.classList.add("active");
   loginTab.classList.remove("active");
@@ -135,15 +113,12 @@ signupTab.addEventListener("click", () => {
   nameInput.classList.remove("hidden");
 
   authButton.textContent = "Sign Up";
-
   authMessage.textContent = "";
+
 });
 
 
-// ===============================
-// LOGIN / SIGNUP
-// ===============================
-
+// LOGIN / SIGNUP BUTTON
 authButton.addEventListener("click", async () => {
 
   const name = nameInput.value.trim();
@@ -152,39 +127,27 @@ authButton.addEventListener("click", async () => {
 
   authMessage.textContent = "";
 
-  if (isSignup && name.length < 2) {
-
+  if (signupMode && name.length < 2) {
     authMessage.textContent = "Please enter your name.";
-
     return;
   }
 
   if (!email) {
-
     authMessage.textContent = "Please enter your email.";
-
     return;
   }
 
   if (password.length < 6) {
-
     authMessage.textContent =
       "Password must be at least 6 characters.";
-
     return;
   }
 
+  authButton.disabled = true;
 
   try {
 
-    authButton.disabled = true;
-
-
-    // ===============================
-    // SIGN UP
-    // ===============================
-
-    if (isSignup) {
+    if (signupMode) {
 
       const result =
         await createUserWithEmailAndPassword(
@@ -193,13 +156,10 @@ authButton.addEventListener("click", async () => {
           password
         );
 
-      const user = result.user;
-
-
       await setDoc(
-        doc(db, "users", user.uid),
+        doc(db, "users", result.user.uid),
         {
-          uid: user.uid,
+          uid: result.user.uid,
           name: name,
           email: email,
           online: true,
@@ -208,18 +168,10 @@ authButton.addEventListener("click", async () => {
         }
       );
 
-
       authMessage.textContent =
         "Account created successfully.";
 
-    }
-
-
-    // ===============================
-    // LOGIN
-    // ===============================
-
-    else {
+    } else {
 
       await signInWithEmailAndPassword(
         auth,
@@ -231,261 +183,160 @@ authButton.addEventListener("click", async () => {
 
   } catch (error) {
 
-    console.error("AUTH ERROR:", error);
+    console.error(error);
 
     if (error.code === "auth/email-already-in-use") {
-
       authMessage.textContent =
         "This email is already registered.";
-
     }
 
     else if (
       error.code === "auth/invalid-credential" ||
-      error.code === "auth/user-not-found" ||
-      error.code === "auth/wrong-password"
+      error.code === "auth/wrong-password" ||
+      error.code === "auth/user-not-found"
     ) {
-
       authMessage.textContent =
         "Email or password is incorrect.";
-
-    }
-
-    else if (error.code === "auth/weak-password") {
-
-      authMessage.textContent =
-        "Password must be at least 6 characters.";
-
     }
 
     else if (error.code === "auth/invalid-email") {
-
       authMessage.textContent =
-        "Please enter a valid email.";
+        "Invalid email address.";
+    }
 
+    else if (error.code === "auth/weak-password") {
+      authMessage.textContent =
+        "Password must be at least 6 characters.";
     }
 
     else if (error.code === "auth/operation-not-allowed") {
-
       authMessage.textContent =
-        "Email/Password login Firebase me enabled nahi hai.";
-
+        "Firebase Email/Password is not enabled.";
     }
 
     else {
-
       authMessage.textContent =
         error.message;
-
     }
 
-  } finally {
-
-    authButton.disabled = false;
-
   }
+
+  authButton.disabled = false;
 
 });
 
 
-// ===============================
 // AUTH STATE
-// ===============================
-
 onAuthStateChanged(auth, async (user) => {
 
-  if (user) {
-
-    currentUser = user;
-
-    try {
-
-      await loadMyProfile();
-
-      authScreen.classList.add("hidden");
-      appScreen.classList.remove("hidden");
-
-      if (myStatus) {
-        myStatus.textContent = "Online";
-      }
-
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          uid: user.uid,
-          email: user.email,
-          online: true,
-          lastSeen: serverTimestamp()
-        },
-        {
-          merge: true
-        }
-      );
-
-      loadUsers();
-
-    } catch (error) {
-
-      console.error("PROFILE ERROR:", error);
-
-      authMessage.textContent =
-        "Profile load nahi ho raha. Firebase check karo.";
-
-    }
-
-  }
-
-  else {
+  if (!user) {
 
     currentUser = null;
-    currentProfile = null;
 
     authScreen.classList.remove("hidden");
     appScreen.classList.add("hidden");
 
+    return;
   }
+
+  currentUser = user;
+
+  authScreen.classList.add("hidden");
+  appScreen.classList.remove("hidden");
+
+  await loadProfile();
+
+  await setDoc(
+    doc(db, "users", user.uid),
+    {
+      online: true,
+      lastSeen: serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  myStatus.textContent = "Online";
+
+  loadUsers();
 
 });
 
 
-// ===============================
-// LOAD MY PROFILE
-// ===============================
+// LOAD PROFILE
+async function loadProfile() {
 
-async function loadMyProfile() {
-
-  if (!currentUser) return;
-
-  const userRef =
-    doc(db, "users", currentUser.uid);
-
-  const snapshot =
-    await getDoc(userRef);
-
-
-  if (snapshot.exists()) {
-
-    currentProfile = snapshot.data();
-
-  }
-
-  else {
-
-    currentProfile = {
-
-      uid: currentUser.uid,
-
-      email: currentUser.email,
-
-      name:
-        currentUser.email?.split("@")[0] || "User"
-
-    };
-
-
-    await setDoc(
-      userRef,
-      {
-        ...currentProfile,
-        online: true,
-        lastSeen: serverTimestamp(),
-        createdAt: serverTimestamp()
-      },
-      {
-        merge: true
-      }
-    );
-
-  }
-
-
-  myName.textContent =
-    currentProfile.name || "User";
-
-  myEmail.textContent =
-    currentProfile.email || currentUser.email;
-
-  myAvatar.textContent =
-    getInitials(currentProfile.name);
-
-}
-
-
-// ===============================
-// LOAD USERS
-// ===============================
-
-function loadUsers() {
-
-  if (unsubscribeUsers) {
-    unsubscribeUsers();
-  }
-
-
-  const usersQuery =
-    query(
-      collection(db, "users"),
-      orderBy("name")
-    );
-
-
-  unsubscribeUsers = onSnapshot(
-
-    usersQuery,
-
-    (snapshot) => {
-
-      usersData = [];
-
-
-      snapshot.forEach((item) => {
-
-        const user = item.data();
-
-
-        if (
-          currentUser &&
-          user.uid !== currentUser.uid
-        ) {
-
-          usersData.push(user);
-
-        }
-
-      });
-
-
-      renderUsers(usersData);
-
-    },
-
-    (error) => {
-
-      console.error(
-        "USERS ERROR:",
-        error
-      );
-
-      usersList.innerHTML =
-        `<p class="loading">
-          Users load nahi ho rahe.
-        </p>`;
-
-    }
-
+  const ref = doc(
+    db,
+    "users",
+    currentUser.uid
   );
 
+  const snap = await getDoc(ref);
+
+  if (snap.exists()) {
+
+    const data = snap.data();
+
+    myName.textContent =
+      data.name || "User";
+
+    myEmail.textContent =
+      data.email || currentUser.email;
+
+    myAvatar.textContent =
+      initials(data.name);
+
+  }
+
 }
 
 
-// ===============================
-// RENDER USERS
-// ===============================
+// LOAD USERS
+function loadUsers() {
 
-function renderUsers(users) {
+  if (stopUsers) {
+    stopUsers();
+  }
+
+  const q = query(
+    collection(db, "users"),
+    orderBy("name")
+  );
+
+  stopUsers = onSnapshot(q, (snapshot) => {
+
+    allUsers = [];
+
+    snapshot.forEach((item) => {
+
+      const user = item.data();
+
+      if (
+        user.uid !== currentUser.uid
+      ) {
+        allUsers.push(user);
+      }
+
+    });
+
+    showUsers(allUsers);
+
+  }, (error) => {
+
+    console.error(error);
+
+    usersList.innerHTML =
+      `<p class="loading">Users load nahi ho rahe.</p>`;
+
+  });
+
+}
+
+
+// SHOW USERS
+function showUsers(users) {
 
   usersList.innerHTML = "";
-
 
   if (users.length === 0) {
 
@@ -495,43 +346,25 @@ function renderUsers(users) {
       </p>`;
 
     return;
-
   }
-
 
   users.forEach((user) => {
 
-    const item =
+    const div =
       document.createElement("div");
 
-    item.className =
-      "user-item";
+    div.className = "user-item";
 
-
-    item.innerHTML = `
-
+    div.innerHTML = `
       <div class="avatar">
-        ${escapeHTML(
-          getInitials(user.name)
-        )}
+        ${initials(user.name)}
       </div>
 
       <div class="user-info">
-
-        <strong>
-          ${escapeHTML(
-            user.name || "User"
-          )}
-        </strong>
-
+        <strong>${safe(user.name || "User")}</strong>
         <span>
-          ${
-            user.online
-              ? "Online"
-              : "Offline"
-          }
+          ${user.online ? "Online" : "Offline"}
         </span>
-
       </div>
 
       ${
@@ -539,298 +372,166 @@ function renderUsers(users) {
           ? `<div class="online-dot"></div>`
           : ""
       }
-
     `;
 
-
-    item.addEventListener(
+    div.addEventListener(
       "click",
       () => openChat(user)
     );
 
-
-    usersList.appendChild(item);
+    usersList.appendChild(div);
 
   });
 
 }
 
 
-// ===============================
-// SEARCH USERS
-// ===============================
+// SEARCH
+searchInput.addEventListener("input", () => {
 
-searchInput.addEventListener(
-  "input",
-  () => {
+  const text =
+    searchInput.value
+      .toLowerCase()
+      .trim();
 
-    const value =
-      searchInput.value
+  const result =
+    allUsers.filter((user) =>
+      (user.name || "")
         .toLowerCase()
-        .trim();
+        .includes(text)
+    );
+
+  showUsers(result);
+
+});
 
 
-    const filtered =
-      usersData.filter((user) => {
-
-        const name =
-          (user.name || "")
-            .toLowerCase();
-
-        const email =
-          (user.email || "")
-            .toLowerCase();
-
-
-        return (
-          name.includes(value) ||
-          email.includes(value)
-        );
-
-      });
-
-
-    renderUsers(filtered);
-
-  }
-);
-
-
-// ===============================
 // OPEN CHAT
-// ===============================
-
 function openChat(user) {
 
   selectedUser = user;
 
-
   emptyChat.classList.add("hidden");
-
   chatBox.classList.remove("hidden");
 
   appScreen.classList.add("chat-open");
-
 
   chatName.textContent =
     user.name || "User";
 
   chatAvatar.textContent =
-    getInitials(user.name);
+    initials(user.name);
 
-
-  updateChatStatus(user);
+  chatStatus.textContent =
+    user.online ? "Online" : "Offline";
 
   loadMessages();
 
 }
 
 
-// ===============================
-// CHAT STATUS
-// ===============================
-
-function updateChatStatus(user) {
-
-  chatStatus.textContent =
-    user.online
-      ? "Online"
-      : "Offline";
-
-}
-
-
-// ===============================
 // CHAT ID
-// ===============================
+function chatId(a, b) {
 
-function getChatId(uid1, uid2) {
-
-  return [uid1, uid2]
+  return [a, b]
     .sort()
     .join("_");
 
 }
 
 
-// ===============================
 // LOAD MESSAGES
-// ===============================
-
 function loadMessages() {
 
-  if (
-    !currentUser ||
-    !selectedUser
-  ) {
-    return;
+  if (stopMessages) {
+    stopMessages();
   }
-
-
-  if (unsubscribeMessages) {
-
-    unsubscribeMessages();
-
-  }
-
 
   messagesBox.innerHTML = "";
 
-
-  const chatId =
-    getChatId(
+  const id =
+    chatId(
       currentUser.uid,
       selectedUser.uid
     );
 
-
-  const messagesRef =
+  const q = query(
     collection(
       db,
       "chats",
-      chatId,
+      id,
       "messages"
-    );
+    ),
+    orderBy("createdAt")
+  );
 
+  stopMessages = onSnapshot(q, (snapshot) => {
 
-  const messagesQuery =
-    query(
-      messagesRef,
-      orderBy("createdAt"),
-      limit(300)
-    );
+    messagesBox.innerHTML = "";
 
+    snapshot.forEach((item) => {
 
-  unsubscribeMessages =
-    onSnapshot(
+      const message =
+        item.data();
 
-      messagesQuery,
+      const div =
+        document.createElement("div");
 
-      (snapshot) => {
+      const sent =
+        message.senderId ===
+        currentUser.uid;
 
-        messagesBox.innerHTML = "";
-
-
-        snapshot.forEach((item) => {
-
-          renderMessage(
-            item.data()
-          );
-
-        });
-
-
-        scrollMessages();
-
-      },
-
-      (error) => {
-
-        console.error(
-          "MESSAGES ERROR:",
-          error
-        );
-
-        messagesBox.innerHTML =
-          `<p class="loading">
-            Messages load nahi ho rahe.
-          </p>`;
-
-      }
-
-    );
-
-}
-
-
-// ===============================
-// RENDER MESSAGE
-// ===============================
-
-function renderMessage(message) {
-
-  const div =
-    document.createElement("div");
-
-
-  const sent =
-    message.senderId ===
-    currentUser.uid;
-
-
-  div.className =
-    sent
-      ? "message sent"
-      : "message received";
-
-
-  let time = "";
-
-
-  if (message.createdAt) {
-
-    try {
-
-      time =
-        formatTime(
-          message.createdAt.toDate()
-        );
-
-    } catch (error) {
-
-      time = "";
-
-    }
-
-  }
-
-
-  div.innerHTML = `
-
-    ${escapeHTML(
-      message.text || ""
-    )}
-
-    <span class="message-time">
-
-      ${time}
-
-      ${
+      div.className =
         sent
-          ? " ✓"
-          : ""
+          ? "message sent"
+          : "message received";
+
+      let time = "";
+
+      if (message.createdAt) {
+
+        time =
+          message.createdAt
+            .toDate()
+            .toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit"
+            });
+
       }
 
-    </span>
+      div.innerHTML = `
+        ${safe(message.text || "")}
+        <span class="message-time">
+          ${time}
+          ${sent ? " ✓" : ""}
+        </span>
+      `;
 
-  `;
+      messagesBox.appendChild(div);
 
+    });
 
-  messagesBox.appendChild(div);
+    messagesBox.scrollTop =
+      messagesBox.scrollHeight;
+
+  });
 
 }
 
 
-// ===============================
 // SEND MESSAGE
-// ===============================
-
 sendButton.addEventListener(
   "click",
   sendMessage
 );
 
-
 messageInput.addEventListener(
   "keydown",
-  (event) => {
+  (e) => {
 
-    if (event.key === "Enter") {
-
-      event.preventDefault();
-
+    if (e.key === "Enter") {
       sendMessage();
-
     }
 
   }
@@ -843,260 +544,120 @@ async function sendMessage() {
     !currentUser ||
     !selectedUser
   ) {
-
     return;
-
   }
-
 
   const text =
     messageInput.value.trim();
 
-
   if (!text) {
-
     return;
-
   }
 
-
-  try {
-
-    sendButton.disabled = true;
-
-
-    const chatId =
-      getChatId(
-        currentUser.uid,
-        selectedUser.uid
-      );
-
-
-    await addDoc(
-
-      collection(
-        db,
-        "chats",
-        chatId,
-        "messages"
-      ),
-
-      {
-
-        senderId:
-          currentUser.uid,
-
-        receiverId:
-          selectedUser.uid,
-
-        text: text,
-
-        createdAt:
-          serverTimestamp(),
-
-        read: false
-
-      }
-
+  const id =
+    chatId(
+      currentUser.uid,
+      selectedUser.uid
     );
 
+  await addDoc(
+    collection(
+      db,
+      "chats",
+      id,
+      "messages"
+    ),
+    {
+      senderId: currentUser.uid,
+      receiverId: selectedUser.uid,
+      text: text,
+      createdAt: serverTimestamp(),
+      read: false
+    }
+  );
 
-    messageInput.value = "";
-
-    messageInput.focus();
-
-  }
-
-  catch (error) {
-
-    console.error(
-      "SEND MESSAGE ERROR:",
-      error
-    );
-
-    alert(
-      "Message send nahi hua. Firebase settings check karo."
-    );
-
-  }
-
-  finally {
-
-    sendButton.disabled = false;
-
-  }
+  messageInput.value = "";
 
 }
 
 
-// ===============================
 // LOGOUT
-// ===============================
-
 logoutButton.addEventListener(
   "click",
   async () => {
 
-    try {
+    if (currentUser) {
 
-      if (currentUser) {
-
-        await setDoc(
-
-          doc(
-            db,
-            "users",
-            currentUser.uid
-          ),
-
-          {
-
-            online: false,
-
-            lastSeen:
-              serverTimestamp()
-
-          },
-
-          {
-            merge: true
-          }
-
-        );
-
-      }
-
-
-      await signOut(auth);
-
-    }
-
-    catch (error) {
-
-      console.error(
-        "LOGOUT ERROR:",
-        error
+      await setDoc(
+        doc(
+          db,
+          "users",
+          currentUser.uid
+        ),
+        {
+          online: false,
+          lastSeen: serverTimestamp()
+        },
+        { merge: true }
       );
 
     }
+
+    await signOut(auth);
 
   }
 );
 
 
-// ===============================
-// BACK BUTTON
-// ===============================
-
+// BACK
 backButton.addEventListener(
   "click",
   () => {
+
+    selectedUser = null;
 
     appScreen.classList.remove(
       "chat-open"
     );
 
-
-    chatBox.classList.add(
-      "hidden"
-    );
-
+    chatBox.classList.add("hidden");
 
     emptyChat.classList.remove(
       "hidden"
     );
 
-
-    selectedUser = null;
-
-
-    if (unsubscribeMessages) {
-
-      unsubscribeMessages();
-
-      unsubscribeMessages = null;
-
+    if (stopMessages) {
+      stopMessages();
+      stopMessages = null;
     }
 
   }
 );
 
 
-// ===============================
-// SCROLL MESSAGES
-// ===============================
+// HELPERS
+function initials(name) {
 
-function scrollMessages() {
+  if (!name) return "U";
 
-  messagesBox.scrollTop =
-    messagesBox.scrollHeight;
-
-}
-
-
-// ===============================
-// GET INITIALS
-// ===============================
-
-function getInitials(name) {
-
-  if (!name) {
-
-    return "U";
-
-  }
-
-
-  const words =
+  const parts =
     name.trim().split(/\s+/);
 
-
-  if (words.length === 1) {
-
-    return words[0]
+  if (parts.length === 1) {
+    return parts[0]
       .substring(0, 2)
       .toUpperCase();
-
   }
 
-
   return (
-    words[0][0] +
-    words[words.length - 1][0]
+    parts[0][0] +
+    parts[parts.length - 1][0]
   ).toUpperCase();
 
 }
 
 
-// ===============================
-// FORMAT TIME
-// ===============================
-
-function formatTime(date) {
-
-  if (!date) {
-
-    return "";
-
-  }
-
-
-  return date.toLocaleTimeString(
-    [],
-    {
-      hour: "2-digit",
-      minute: "2-digit"
-    }
-  );
-
-}
-
-
-// ===============================
-// ESCAPE HTML
-// ===============================
-
-function escapeHTML(text) {
+function safe(text) {
 
   const div =
     document.createElement("div");
@@ -1108,8 +669,5 @@ function escapeHTML(text) {
 }
 
 
-// ===============================
-// DEFAULT LOGIN SCREEN
-// ===============================
-
+// START WITH LOGIN
 nameInput.classList.add("hidden");
