@@ -21,7 +21,6 @@
         <button id="signupTab">Sign Up</button>
       </div>
 
-      <!-- Signup Name -->
       <input
         id="nameInput"
         type="text"
@@ -54,7 +53,6 @@
   <!-- MAIN APP -->
   <div id="app" class="app hidden">
 
-    <!-- SIDEBAR -->
     <aside class="sidebar">
 
       <div class="sidebar-header">
@@ -68,8 +66,8 @@
         </button>
       </div>
 
-      <!-- MY PROFILE -->
       <div class="my-profile">
+
         <div class="avatar" id="myAvatar">
           B
         </div>
@@ -78,64 +76,91 @@
           <strong id="myName">User</strong>
           <small id="myEmail">email</small>
         </div>
+
       </div>
 
-      <!-- SEARCH -->
+
       <div class="search-box">
+
         <input
           id="searchInput"
           type="text"
           placeholder="Search users..."
         >
+
       </div>
 
-      <!-- USERS -->
+
       <div id="usersList" class="users-list">
-        <p class="loading">Loading users...</p>
+
+        <p class="loading">
+          Loading users...
+        </p>
+
       </div>
 
     </aside>
 
 
-    <!-- CHAT AREA -->
     <main class="chat-area">
 
-      <!-- EMPTY CHAT -->
       <div id="emptyChat" class="empty-chat">
-        <div class="empty-icon">💬</div>
-        <h2>Welcome to BOYS</h2>
-        <p>Select a user to start chatting.</p>
+
+        <div class="empty-icon">
+          💬
+        </div>
+
+        <h2>
+          Welcome to BOYS
+        </h2>
+
+        <p>
+          Select a user to start chatting.
+        </p>
+
       </div>
 
 
-      <!-- CHAT -->
       <div id="chatBox" class="chat-box hidden">
 
-        <!-- CHAT HEADER -->
         <header class="chat-header">
 
-          <button id="backButton" class="back-btn">
+          <button
+            id="backButton"
+            class="back-btn"
+          >
             ←
           </button>
 
-          <div class="chat-avatar" id="chatAvatar">
+          <div
+            class="chat-avatar"
+            id="chatAvatar"
+          >
             U
           </div>
 
           <div class="chat-user-info">
-            <strong id="chatName">User</strong>
-            <span id="chatStatus">Offline</span>
+
+            <strong id="chatName">
+              User
+            </strong>
+
+            <span id="chatStatus">
+              Offline
+            </span>
+
           </div>
 
         </header>
 
 
-        <!-- MESSAGES -->
-        <div id="messages" class="messages">
+        <div
+          id="messages"
+          class="messages"
+        >
         </div>
 
 
-        <!-- MESSAGE INPUT -->
         <div class="message-area">
 
           <input
@@ -158,7 +183,11 @@
   </div>
 
 
-  <script type="module" src="script.js"></script>
+  <!-- IMPORTANT: FILE NAME FIXED -->
+  <script
+    type="module"
+    src="boys3.js"
+  ></script>
 
 </body>
 </html>
