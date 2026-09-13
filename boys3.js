@@ -24,7 +24,8 @@ import {
   onSnapshot,
   serverTimestamp,
   updateDoc,
-  arrayUnion
+  arrayUnion,
+  writeBatch
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 
@@ -82,7 +83,13 @@ const sendButton = document.getElementById("sendButton");
 
 const backButton = document.getElementById("backButton");
 
-// Delete menu
+// Context menu
+const msgMenu = document.getElementById("msgMenu");
+const menuCopy = document.getElementById("menuCopy");
+const menuSelect = document.getElementById("menuSelect");
+const menuDelete = document.getElementById("menuDelete");
+
+// Delete sub-menu
 const deleteMenu = document.getElementById("deleteMenu");
 const deleteForMe = document.getElementById("deleteForMe");
 const deleteForEveryone = document.getElementById("deleteForEveryone");
@@ -103,7 +110,9 @@ let idleTimer = null;
 let isOnline = false;
 let activityListenersAttached = false;
 
-let pendingDeleteMsg = null;
+let pendingMsg = null;
+let selectedMessages = new Set();
+let isSelectMode = false;
 
 
 // ==================== LOGIN TAB ====================
@@ -257,7 +266,7 @@ async function loadProfile() {
 }
 
 
-// ==================== PRESENCE SYSTEM ====================
+// ==================== PRESENCE ====================
 async function setUserOnline(status) {
 
   if (!currentUser) return;
@@ -590,10 +599,16 @@ function loadMessages() {
 
     messagesBox.innerHTML = "";
 
-    snapshot.forEach((item) => {
+    const messages = [];
 
-      const message = item.data();
-      const msgId = item.id;
+    snapshot.forEach((item) => {
+      messages.push({
+        id: item.id,
+        data: item.data()
+      });
+    });
+
+    messages.forEach(({ id: msgId, data: message }) => {
 
       // Delete for me filter
       const deletedFor = message.deletedFor || [];
@@ -602,11 +617,11 @@ function loadMessages() {
       }
 
       const div = document.createElement("div");
-
       const sent = message.senderId === currentUser.uid;
 
       div.className = sent ? "message sent" : "message received";
       div.dataset.msgId = msgId;
+      div.dataset.sent = sent ? "1" : "0";
 
       let time = "";
 
@@ -617,7 +632,19 @@ function loadMessages() {
         });
       }
 
-      // Deleted for everyone
+      // Ticks sirf apne bheje messages pe
+      let tickHTML = "";
+
+      if (sent && !message.deletedForEveryone) {
+
+        if (message.read) {
+          tickHTML = `<span class="tick double read">✓✓</span>`;
+        } else {
+          tickHTML = `<span class="tick double">✓✓</span>`;
+        }
+
+      }
+
       if (message.deletedForEveryone) {
         div.classList.add("deleted");
         div.innerHTML = `
@@ -629,12 +656,13 @@ function loadMessages() {
           <span class="msg-text">${safe(message.text || "")}</span>
           <span class="message-time">
             ${time}
-            ${sent ? " ✓" : ""}
+            ${tickHTML}
           </span>
         `;
       }
 
-      attachDeleteHandler(div, msgId, message, sent);
+      // Long press / right click handler
+      attachMessageHandlers(div, msgId, message, sent);
 
       messagesBox.appendChild(div);
 
@@ -642,23 +670,114 @@ function loadMessages() {
 
     messagesBox.scrollTop = messagesBox.scrollHeight;
 
+    // 🔥 Read receipts — jo messages receiver ne nahi padhe, unko read mark karo
+    markMessagesAsRead();
+
   });
 
 }
 
 
-// ==================== DELETE HANDLER (long press / right click) ====================
-function attachDeleteHandler(div, msgId, message, sent) {
+// ==================== MARK AS READ ====================
+async function markMessagesAsRead() {
+
+  if (!currentUser || !selectedUser) return;
+
+  const id = chatId(currentUser.uid, selectedUser.uid);
+
+  try {
+
+    const q = query(
+      collection(db, "chats", id, "messages"),
+      orderBy("createdAt")
+    );
+
+    const snapshot = await new Promise((resolve, reject) => {
+      // one-time get
+      const { getDocs } = window.firebaseHelpers || {};
+      // Use onSnapshot once but we need getDocs. Let's import dynamically.
+      resolve(null);
+    });
+
+  } catch (err) {
+    // ignore
+  }
+
+  // Simpler: iterate messagesBox children
+  const messageEls = messagesBox.querySelectorAll(".message.received");
+
+  if (messageEls.length === 0) return;
+
+  const batch = writeBatch(db);
+
+  let hasUpdates = false;
+
+  messageEls.forEach((el) => {
+
+    const msgId = el.dataset.msgId;
+
+    // Check karo agar ye already read hai to skip
+    // Hum data attributes store kar sakte hain — but easier: read from snapshot
+    // Use simple approach: update all received unread
+
+  });
+
+  // Alternative simpler: directly update all received messages where read=false
+  // We'll do it by iterating our cached messages
+  // But since we don't have cache, let's attach read status via dataset
+
+  messageEls.forEach((el) => {
+
+    if (el.dataset.read === "1") return;
+
+    const msgId = el.dataset.msgId;
+
+    batch.update(
+      doc(db, "chats", id, "messages", msgId),
+      { read: true, readAt: serverTimestamp() }
+    );
+
+    hasUpdates = true;
+
+  });
+
+  if (hasUpdates) {
+    try {
+      await batch.commit();
+    } catch (err) {
+      console.error("Read update error:", err);
+    }
+  }
+
+}
+
+
+// ==================== MESSAGE HANDLERS ====================
+function attachMessageHandlers(div, msgId, message, sent) {
+
+  // Store read status in dataset for markMessagesAsRead
+  if (message.read) {
+    div.dataset.read = "1";
+  } else {
+    div.dataset.read = "0";
+  }
 
   let pressTimer = null;
   let longPressed = false;
+  let startX = 0;
+  let startY = 0;
 
-  const startPress = () => {
+  const startPress = (x, y) => {
+
     longPressed = false;
+    startX = x;
+    startY = y;
+
     pressTimer = setTimeout(() => {
       longPressed = true;
-      openDeleteMenu(msgId, message, sent);
+      openContextMenu(div, msgId, message, sent, x, y);
     }, 500);
+
   };
 
   const cancelPress = () => {
@@ -669,26 +788,442 @@ function attachDeleteHandler(div, msgId, message, sent) {
   };
 
   // Mobile: touch
-  div.addEventListener("touchstart", startPress, { passive: true });
+  div.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    startPress(t.clientX, t.clientY);
+  }, { passive: true });
+
   div.addEventListener("touchend", cancelPress);
-  div.addEventListener("touchmove", cancelPress);
   div.addEventListener("touchcancel", cancelPress);
+
+  div.addEventListener("touchmove", (e) => {
+    const t = e.touches[0];
+    const dx = Math.abs(t.clientX - startX);
+    const dy = Math.abs(t.clientY - startY);
+    if (dx > 10 || dy > 10) cancelPress();
+  });
 
   // Desktop: mouse hold
   div.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
-    startPress();
+    startPress(e.clientX, e.clientY);
   });
+
   div.addEventListener("mouseup", cancelPress);
   div.addEventListener("mouseleave", cancelPress);
 
   // Desktop: right click
   div.addEventListener("contextmenu", (e) => {
     e.preventDefault();
-    openDeleteMenu(msgId, message, sent);
+    openContextMenu(div, msgId, message, sent, e.clientX, e.clientY);
   });
 
 }
 
 
-// =
+// ==================== OPEN CONTEXT MENU ====================
+function openContextMenu(div, msgId, message, sent, x, y) {
+
+  // Agar delete-for-everyone hai to menu na dikhao
+  if (message.deletedForEveryone) {
+    return;
+  }
+
+  // Agar select mode me hai to select toggle karo
+  if (isSelectMode) {
+    toggleSelect(div, msgId);
+    return;
+  }
+
+  pendingMsg = {
+    id: msgId,
+    data: message,
+    sent: sent,
+    element: div
+  };
+
+  // "Delete for everyone" option sirf apne messages pe
+  if (!sent) {
+    deleteForEveryone.style.display = "none";
+  } else {
+    deleteForEveryone.style.display = "flex";
+  }
+
+  msgMenu.classList.remove("hidden");
+
+  const content = msgMenu.querySelector(".msg-menu-content");
+
+  // Desktop: position at cursor
+  if (window.innerWidth > 700) {
+
+    content.style.position = "fixed";
+
+    // Reset pehle
+    content.style.left = "0px";
+    content.style.top = "0px";
+
+    const rect = content.getBoundingClientRect();
+
+    let left = x;
+    let top = y;
+
+    // Screen se bahar na jaye
+    if (left + rect.width > window.innerWidth - 10) {
+      left = window.innerWidth - rect.width - 10;
+    }
+
+    if (top + rect.height > window.innerHeight - 10) {
+      top = window.innerHeight - rect.height - 10;
+    }
+
+    content.style.left = left + "px";
+    content.style.top = top + "px";
+
+  }
+
+}
+
+
+// ==================== CLOSE CONTEXT MENU ====================
+function closeContextMenu() {
+  msgMenu.classList.add("hidden");
+  pendingMsg = null;
+}
+
+// Click outside
+msgMenu.addEventListener("click", (e) => {
+  if (e.target === msgMenu || e.target.classList.contains("msg-menu-content")) {
+    closeContextMenu();
+  }
+});
+
+
+// ==================== MENU: COPY ====================
+menuCopy.addEventListener("click", async () => {
+
+  if (!pendingMsg) return;
+
+  const text = pendingMsg.data.text || "";
+
+  try {
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // Fallback
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+
+    // Feedback
+    showToast("✅ Copied!");
+
+  } catch (err) {
+    console.error("Copy error:", err);
+    showToast("❌ Copy fail hua");
+  }
+
+  closeContextMenu();
+
+});
+
+
+// ==================== MENU: SELECT ====================
+menuSelect.addEventListener("click", () => {
+
+  if (!pendingMsg) return;
+
+  isSelectMode = true;
+  selectedMessages.clear();
+
+  if (pendingMsg.element) {
+    toggleSelect(pendingMsg.element, pendingMsg.id);
+  }
+
+  closeContextMenu();
+
+  showToast("Select mode ON — message pe tap karo");
+
+});
+
+
+function toggleSelect(div, msgId) {
+
+  if (selectedMessages.has(msgId)) {
+    selectedMessages.delete(msgId);
+    div.classList.remove("selected");
+  } else {
+    selectedMessages.add(msgId);
+    div.classList.add("selected");
+  }
+
+  // Agar koi message select nahi raha to select mode off
+  if (selectedMessages.size === 0) {
+    isSelectMode = false;
+  }
+
+}
+
+
+// ==================== MENU: DELETE ====================
+menuDelete.addEventListener("click", () => {
+
+  if (!pendingMsg) return;
+
+  // Delete sub-menu kholo
+  msgMenu.classList.add("hidden");
+  deleteMenu.classList.remove("hidden");
+
+});
+
+
+// ==================== DELETE FOR ME ====================
+deleteForMe.addEventListener("click", async () => {
+
+  if (!pendingMsg) return;
+
+  const { id } = pendingMsg;
+  const id_chat = chatId(currentUser.uid, selectedUser.uid);
+
+  try {
+
+    await updateDoc(
+      doc(db, "chats", id_chat, "messages", id),
+      {
+        deletedFor: arrayUnion(currentUser.uid)
+      }
+    );
+
+  } catch (err) {
+    console.error("Delete for me error:", err);
+    showToast("❌ Delete fail hua");
+  }
+
+  closeDeleteMenu();
+
+});
+
+
+// ==================== DELETE FOR EVERYONE ====================
+deleteForEveryone.addEventListener("click", async () => {
+
+  if (!pendingMsg) return;
+
+  const { id, sent } = pendingMsg;
+
+  if (!sent) {
+    showToast("Sirf apne message ko delete for everyone kar sakte ho");
+    closeDeleteMenu();
+    return;
+  }
+
+  const id_chat = chatId(currentUser.uid, selectedUser.uid);
+
+  try {
+
+    await updateDoc(
+      doc(db, "chats", id_chat, "messages", id),
+      {
+        deletedForEveryone: true,
+        text: "",
+        deletedAt: serverTimestamp()
+      }
+    );
+
+  } catch (err) {
+    console.error("Delete for everyone error:", err);
+    showToast("❌ Delete fail hua");
+  }
+
+  closeDeleteMenu();
+
+});
+
+
+// ==================== DELETE CANCEL ====================
+deleteCancel.addEventListener("click", closeDeleteMenu);
+
+deleteMenu.addEventListener("click", (e) => {
+  if (e.target === deleteMenu || e.target.classList.contains("msg-menu-content")) {
+    closeDeleteMenu();
+  }
+});
+
+
+function closeDeleteMenu() {
+  deleteMenu.classList.add("hidden");
+  pendingMsg = null;
+}
+
+
+// ==================== SEND MESSAGE ====================
+sendButton.addEventListener("click", sendMessage);
+
+messageInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+
+async function sendMessage() {
+
+  if (!currentUser || !selectedUser) return;
+
+  const text = messageInput.value.trim();
+
+  if (!text) return;
+
+  const id = chatId(currentUser.uid, selectedUser.uid);
+
+  try {
+
+    await addDoc(
+      collection(db, "chats", id, "messages"),
+      {
+        senderId: currentUser.uid,
+        receiverId: selectedUser.uid,
+        text: text,
+        createdAt: serverTimestamp(),
+        read: false,
+        deletedFor: [],
+        deletedForEveryone: false
+      }
+    );
+
+    messageInput.value = "";
+
+    messagesBox.scrollTop = messagesBox.scrollHeight;
+
+  } catch (err) {
+    console.error("Send error:", err);
+    showToast("❌ Message send nahi hua");
+  }
+
+}
+
+
+// ==================== LOGOUT ====================
+logoutButton.addEventListener("click", async () => {
+
+  if (currentUser) {
+
+    await setDoc(
+      doc(db, "users", currentUser.uid),
+      {
+        online: false,
+        lastSeen: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+  }
+
+  stopPresence();
+  await signOut(auth);
+
+});
+
+
+// ==================== BACK ====================
+backButton.addEventListener("click", () => {
+
+  selectedUser = null;
+
+  appScreen.classList.remove("chat-open");
+
+  chatBox.classList.add("hidden");
+  emptyChat.classList.remove("hidden");
+
+  if (stopMessages) {
+    stopMessages();
+    stopMessages = null;
+  }
+
+  if (stopSelectedUser) {
+    stopSelectedUser();
+    stopSelectedUser = null;
+  }
+
+  closeContextMenu();
+  closeDeleteMenu();
+
+});
+
+
+// ==================== TOAST ====================
+function showToast(msg) {
+
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add("show");
+  }, 10);
+
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 300);
+  }, 2000);
+
+}
+
+
+// ==================== HELPERS ====================
+function initials(name) {
+
+  if (!name) return "U";
+
+  const parts = name.trim().split(/\s+/);
+
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+
+  return (
+    parts[0][0] +
+    parts[parts.length - 1][0]
+  ).toUpperCase();
+
+}
+
+
+function safe(text) {
+
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+
+}
+
+
+function timeAgo(date) {
+
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+
+  if (seconds < 10) return "just now";
+  if (seconds < 60) return seconds + " sec ago";
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return minutes + " min ago";
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours + " hour" + (hours > 1 ? "s" : "") + " ago";
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return days + " day" + (days > 1 ? "s" : "") + " ago";
+
+  return date.toLocaleDateString();
+
+}
+
+
+// ==================== START ====================
+nameInput.classList.add("hidden");
