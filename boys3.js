@@ -23,9 +23,11 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
-  deleteDoc,
   updateDoc,
-  arrayUnion
+  arrayUnion,
+  getDocs,
+  where,
+  writeBatch
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 
@@ -83,7 +85,13 @@ const sendButton = document.getElementById("sendButton");
 
 const backButton = document.getElementById("backButton");
 
-// Delete menu elements
+// Context menu
+const msgMenu = document.getElementById("msgMenu");
+const menuCopy = document.getElementById("menuCopy");
+const menuSelect = document.getElementById("menuSelect");
+const menuDelete = document.getElementById("menuDelete");
+
+// Delete sub-menu
 const deleteMenu = document.getElementById("deleteMenu");
 const deleteForMe = document.getElementById("deleteForMe");
 const deleteForEveryone = document.getElementById("deleteForEveryone");
@@ -99,15 +107,14 @@ let stopUsers = null;
 let stopMessages = null;
 let stopSelectedUser = null;
 
-let presenceInterval = null;
 let heartbeatInterval = null;
 let idleTimer = null;
 let isOnline = false;
 let activityListenersAttached = false;
 
-// Delete state
-let pendingDeleteMsg = null;  // { id, data, isSent }
-let allMessagesCache = [];    // For finding message by id
+let pendingMsg = null;      // { id, data, sent, element }
+let selectedMessages = new Set();  // For multi-select
+let isSelectMode = false;
 
 
 // ==================== LOGIN TAB ====================
@@ -582,370 +589,8 @@ function loadMessages() {
   }
 
   messagesBox.innerHTML = "";
-  allMessagesCache = [];
 
   const id = chatId(currentUser.uid, selectedUser.uid);
 
   const q = query(
-    collection(db, "chats", id, "messages"),
-    orderBy("createdAt")
-  );
-
-  stopMessages = onSnapshot(q, (snapshot) => {
-
-    messagesBox.innerHTML = "";
-    allMessagesCache = [];
-
-    snapshot.forEach((item) => {
-
-      const message = item.data();
-      const msgId = item.id;
-
-      // 🔥 "Delete for me" filter
-      const deletedFor = message.deletedFor || [];
-      if (deletedFor.includes(currentUser.uid)) {
-        return; // Skip - user ne apne liye delete kiya hai
-      }
-
-      // Cache me store karo
-      allMessagesCache.push({ id: msgId, data: message });
-
-      const div = document.createElement("div");
-
-      const sent = message.senderId === currentUser.uid;
-
-      div.className = sent ? "message sent" : "message received";
-      div.dataset.msgId = msgId;
-      div.dataset.sent = sent ? "1" : "0";
-
-      let time = "";
-
-      if (message.createdAt) {
-        time = message.createdAt.toDate().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit"
-        });
-      }
-
-      // Agar "deleted for everyone" hai
-      if (message.deletedForEveryone) {
-        div.classList.add("deleted");
-        div.innerHTML = `
-          <em>🚫 This message was deleted</em>
-          <span class="message-time">${time}</span>
-        `;
-      } else {
-        div.innerHTML = `
-          <span class="msg-text">${safe(message.text || "")}</span>
-          <span class="message-time">
-            ${time}
-            ${sent ? " ✓" : ""}
-          </span>
-        `;
-      }
-
-      // 🔥 Long press / right click se delete menu
-      attachDeleteHandler(div, msgId, message, sent);
-
-      messagesBox.appendChild(div);
-
-    });
-
-    messagesBox.scrollTop = messagesBox.scrollHeight;
-
-  });
-
-}
-
-
-// ==================== DELETE HANDLER ====================
-function attachDeleteHandler(div, msgId, message, sent) {
-
-  let pressTimer = null;
-  let longPressed = false;
-
-  // Mobile: long press (500ms)
-  div.addEventListener("touchstart", (e) => {
-
-    longPressed = false;
-
-    pressTimer = setTimeout(() => {
-      longPressed = true;
-      openDeleteMenu(msgId, message, sent);
-    }, 500);
-
-  }, { passive: true });
-
-  div.addEventListener("touchend", () => {
-    if (pressTimer) clearTimeout(pressTimer);
-  });
-
-  div.addEventListener("touchmove", () => {
-    if (pressTimer) clearTimeout(pressTimer);
-  });
-
-  // Desktop: right click
-  div.addEventListener("contextmenu", (e) => {
-    e.preventDefault();
-    openDeleteMenu(msgId, message, sent);
-  });
-
-  // Desktop: bhi long press work kare (mouse hold)
-  div.addEventListener("mousedown", (e) => {
-    if (e.button !== 0) return;
-
-    pressTimer = setTimeout(() => {
-      openDeleteMenu(msgId, message, sent);
-    }, 600);
-  });
-
-  div.addEventListener("mouseup", () => {
-    if (pressTimer) clearTimeout(pressTimer);
-  });
-
-  div.addEventListener("mouseleave", () => {
-    if (pressTimer) clearTimeout(pressTimer);
-  });
-
-}
-
-
-// ==================== OPEN DELETE MENU ====================
-function openDeleteMenu(msgId, message, sent) {
-
-  // Agar already deleted for everyone hai to menu na kholo
-  if (message.deletedForEveryone) return;
-
-  pendingDeleteMsg = { id: msgId, data: message, isSent: sent };
-
-  deleteMenu.classList.remove("hidden");
-
-}
-
-
-// ==================== DELETE FOR ME ====================
-deleteForMe.addEventListener("click", async () => {
-
-  if (!pendingDeleteMsg) return;
-
-  const { id } = pendingDeleteMsg;
-  const id_chat = chatId(currentUser.uid, selectedUser.uid);
-
-  try {
-
-    await updateDoc(
-      doc(db, "chats", id_chat, "messages", id),
-      {
-        deletedFor: arrayUnion(currentUser.uid)
-      }
-    );
-
-  } catch (err) {
-    console.error("Delete for me error:", err);
-  }
-
-  closeDeleteMenu();
-
-});
-
-
-// ==================== DELETE FOR EVERYONE ====================
-deleteForEveryone.addEventListener("click", async () => {
-
-  if (!pendingDeleteMsg) return;
-
-  const { id, isSent } = pendingDeleteMsg;
-
-  // Sirf apne bheje message ko delete for everyone kar sakte ho
-  if (!isSent) {
-    alert("Aap sirf apne bheje messages 'delete for everyone' kar sakte ho.");
-    closeDeleteMenu();
-    return;
-  }
-
-  const id_chat = chatId(currentUser.uid, selectedUser.uid);
-
-  try {
-
-    await updateDoc(
-      doc(db, "chats", id_chat, "messages", id),
-      {
-        deletedForEveryone: true,
-        text: "",
-        deletedAt: serverTimestamp()
-      }
-    );
-
-  } catch (err) {
-    console.error("Delete for everyone error:", err);
-  }
-
-  closeDeleteMenu();
-
-});
-
-
-// ==================== CANCEL ====================
-deleteCancel.addEventListener("click", closeDeleteMenu);
-
-// Click outside to close
-deleteMenu.addEventListener("click", (e) => {
-  if (e.target === deleteMenu) {
-    closeDeleteMenu();
-  }
-});
-
-
-function closeDeleteMenu() {
-  deleteMenu.classList.add("hidden");
-  pendingDeleteMsg = null;
-}
-
-
-// ==================== SEND MESSAGE ====================
-sendButton.addEventListener("click", sendMessage);
-
-messageInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    sendMessage();
-  }
-});
-
-
-async function sendMessage() {
-
-  if (!currentUser || !selectedUser) return;
-
-  const text = messageInput.value.trim();
-
-  if (!text) return;
-
-  const id = chatId(currentUser.uid, selectedUser.uid);
-
-  try {
-
-    await addDoc(
-      collection(db, "chats", id, "messages"),
-      {
-        senderId: currentUser.uid,
-        receiverId: selectedUser.uid,
-        text: text,
-        createdAt: serverTimestamp(),
-        read: false,
-        deletedFor: [],
-        deletedForEveryone: false
-      }
-    );
-
-    messageInput.value = "";
-
-    // Mobile keyboard band na karo, aur scroll neeche rakho
-    messagesBox.scrollTop = messagesBox.scrollHeight;
-
-  } catch (err) {
-    console.error("Send error:", err);
-    alert("Message send nahi hua. Internet check karo.");
-  }
-
-}
-
-
-// ==================== LOGOUT ====================
-logoutButton.addEventListener("click", async () => {
-
-  if (currentUser) {
-
-    await setDoc(
-      doc(db, "users", currentUser.uid),
-      {
-        online: false,
-        lastSeen: serverTimestamp()
-      },
-      { merge: true }
-    );
-
-  }
-
-  stopPresence();
-  await signOut(auth);
-
-});
-
-
-// ==================== BACK ====================
-backButton.addEventListener("click", () => {
-
-  selectedUser = null;
-
-  appScreen.classList.remove("chat-open");
-
-  chatBox.classList.add("hidden");
-  emptyChat.classList.remove("hidden");
-
-  if (stopMessages) {
-    stopMessages();
-    stopMessages = null;
-  }
-
-  if (stopSelectedUser) {
-    stopSelectedUser();
-    stopSelectedUser = null;
-  }
-
-  closeDeleteMenu();
-
-});
-
-
-// ==================== HELPERS ====================
-function initials(name) {
-
-  if (!name) return "U";
-
-  const parts = name.trim().split(/\s+/);
-
-  if (parts.length === 1) {
-    return parts[0].substring(0, 2).toUpperCase();
-  }
-
-  return (
-    parts[0][0] +
-    parts[parts.length - 1][0]
-  ).toUpperCase();
-
-}
-
-
-function safe(text) {
-
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-
-}
-
-
-function timeAgo(date) {
-
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-
-  if (seconds < 10) return "just now";
-  if (seconds < 60) return seconds + " sec ago";
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return minutes + " min ago";
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return hours + " hour" + (hours > 1 ? "s" : "") + " ago";
-
-  const days = Math.floor(hours / 24);
-  if (days < 7) return days + " day" + (days > 1 ? "s" : "") + " ago";
-
-  return date.toLocaleDateString();
-
-}
-
-
-// ==================== START ====================
-nameInput.classList.add("hidden");
+    collection
