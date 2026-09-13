@@ -183,16 +183,32 @@
   </div>
 
 
-  <!-- DELETE MENU (NEW) -->
-  <div id="deleteMenu" class="delete-menu hidden">
-    <div class="delete-menu-content">
-      <button class="delete-option" id="deleteForMe">
+  <!-- MESSAGE CONTEXT MENU (right click / long press) -->
+  <div id="msgMenu" class="msg-menu hidden">
+    <div class="msg-menu-content">
+      <button class="msg-option" id="menuCopy">
+        📋 Copy
+      </button>
+      <button class="msg-option" id="menuSelect">
+        ✅ Select
+      </button>
+      <button class="msg-option danger" id="menuDelete">
+        🗑️ Delete
+      </button>
+    </div>
+  </div>
+
+
+  <!-- DELETE SUB-MENU -->
+  <div id="deleteMenu" class="msg-menu hidden">
+    <div class="msg-menu-content">
+      <button class="msg-option danger" id="deleteForMe">
         🗑️ Delete for me
       </button>
-      <button class="delete-option" id="deleteForEveryone">
+      <button class="msg-option danger" id="deleteForEveryone">
         🗑️ Delete for everyone
       </button>
-      <button class="delete-option cancel" id="deleteCancel">
+      <button class="msg-option cancel" id="deleteCancel">
         ✖ Cancel
       </button>
     </div>
