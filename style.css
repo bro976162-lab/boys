@@ -2,12 +2,14 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   font-family: Arial, sans-serif;
   background: #f0f2f5;
   color: #111;
+  overflow: hidden;
 }
 
 /* COMMON */
@@ -128,6 +130,7 @@ input {
 
 .app {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   overflow: hidden;
   background: white;
@@ -153,6 +156,7 @@ input {
   justify-content: space-between;
   background: #2563eb;
   color: white;
+  flex-shrink: 0;
 }
 
 .sidebar-header h2 {
@@ -187,6 +191,7 @@ input {
   gap: 12px;
   padding: 14px 16px;
   border-bottom: 1px solid #eee;
+  flex-shrink: 0;
 }
 
 .avatar,
@@ -221,6 +226,7 @@ input {
 .search-box {
   padding: 12px;
   background: #f7f7f7;
+  flex-shrink: 0;
 }
 
 .search-box input {
@@ -242,6 +248,7 @@ input {
 .users-list {
   flex: 1;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .loading {
@@ -262,6 +269,10 @@ input {
 
 .user-item:hover {
   background: #f5f7fa;
+}
+
+.user-item:active {
+  background: #eef2f7;
 }
 
 .user-info {
@@ -301,6 +312,7 @@ input {
   min-width: 0;
   position: relative;
   background: #eef2f7;
+  overflow: hidden;
 }
 
 
@@ -315,6 +327,7 @@ input {
   justify-content: center;
   color: #777;
   text-align: center;
+  padding: 20px;
 }
 
 .empty-icon {
@@ -328,17 +341,18 @@ input {
 }
 
 
-/* CHAT BOX */
-
+/* ============ CHAT BOX (WhatsApp style layout) ============ */
 .chat-box {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  position: relative;
 }
 
 
-/* CHAT HEADER */
+/* CHAT HEADER (fixed top) */
 
 .chat-header {
   height: 70px;
@@ -348,6 +362,8 @@ input {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
+  z-index: 10;
 }
 
 .back-btn {
@@ -357,15 +373,20 @@ input {
   font-size: 25px;
   cursor: pointer;
   color: #2563eb;
+  padding: 5px 10px;
 }
 
 .chat-user-info {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .chat-user-info strong {
   font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chat-user-info span {
@@ -375,151 +396,11 @@ input {
 }
 
 
-/* MESSAGES */
+/* ============ MESSAGES (scrollable middle) ============ */
 
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.message {
-  max-width: 70%;
-  padding: 9px 12px;
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.4;
-  word-wrap: break-word;
-}
-
-.message.sent {
-  align-self: flex-end;
-  background: #2563eb;
-  color: white;
-  border-bottom-right-radius: 3px;
-}
-
-.message.received {
-  align-self: flex-start;
-  background: white;
-  color: #222;
-  border-bottom-left-radius: 3px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
-
-.message-time {
-  font-size: 10px;
-  opacity: 0.65;
-  margin-left: 7px;
-}
-
-
-/* MESSAGE INPUT */
-
-.message-area {
-  min-height: 65px;
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: white;
-  border-top: 1px solid #ddd;
-}
-
-.message-area input {
-  flex: 1;
-  min-width: 0;
-  padding: 12px 15px;
-  border: 1px solid #ddd;
-  border-radius: 25px;
-  outline: none;
-  font-size: 15px;
-}
-
-.message-area input:focus {
-  border-color: #2563eb;
-}
-
-.message-area button {
-  width: 45px;
-  height: 45px;
-  border: none;
-  border-radius: 50%;
-  background: #2563eb;
-  color: white;
-  font-size: 20px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.message-area button:hover {
-  background: #1d4ed8;
-}
-
-
-/* SCROLLBAR */
-
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #c7c7c7;
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-
-/* MOBILE */
-
-@media (max-width: 700px) {
-
-  .sidebar {
-    width: 100%;
-    min-width: 100%;
-  }
-
-  .chat-area {
-    display: none;
-    width: 100%;
-  }
-
-  .app.chat-open .sidebar {
-    display: none;
-  }
-
-  .app.chat-open .chat-area {
-    display: block;
-  }
-
-  .back-btn {
-    display: block;
-  }
-
-  .message {
-    max-width: 82%;
-  }
-
-  .auth-box {
-    padding: 28px 20px;
-  }
-
-  .sidebar-header {
-    height: 65px;
-  }
-
-  .chat-header {
-    height: 65px;
-  }
-
-  .messages {
-    padding: 14px;
-  }
-
-}
+  overflow-x: hidden;
+  padding: 16px;
+ 
