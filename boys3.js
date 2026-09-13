@@ -24,10 +24,7 @@ import {
   onSnapshot,
   serverTimestamp,
   updateDoc,
-  arrayUnion,
-  getDocs,
-  where,
-  writeBatch
+  arrayUnion
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 
@@ -85,13 +82,7 @@ const sendButton = document.getElementById("sendButton");
 
 const backButton = document.getElementById("backButton");
 
-// Context menu
-const msgMenu = document.getElementById("msgMenu");
-const menuCopy = document.getElementById("menuCopy");
-const menuSelect = document.getElementById("menuSelect");
-const menuDelete = document.getElementById("menuDelete");
-
-// Delete sub-menu
+// Delete menu
 const deleteMenu = document.getElementById("deleteMenu");
 const deleteForMe = document.getElementById("deleteForMe");
 const deleteForEveryone = document.getElementById("deleteForEveryone");
@@ -112,9 +103,7 @@ let idleTimer = null;
 let isOnline = false;
 let activityListenersAttached = false;
 
-let pendingMsg = null;      // { id, data, sent, element }
-let selectedMessages = new Set();  // For multi-select
-let isSelectMode = false;
+let pendingDeleteMsg = null;
 
 
 // ==================== LOGIN TAB ====================
@@ -593,4 +582,113 @@ function loadMessages() {
   const id = chatId(currentUser.uid, selectedUser.uid);
 
   const q = query(
-    collection
+    collection(db, "chats", id, "messages"),
+    orderBy("createdAt")
+  );
+
+  stopMessages = onSnapshot(q, (snapshot) => {
+
+    messagesBox.innerHTML = "";
+
+    snapshot.forEach((item) => {
+
+      const message = item.data();
+      const msgId = item.id;
+
+      // Delete for me filter
+      const deletedFor = message.deletedFor || [];
+      if (deletedFor.includes(currentUser.uid)) {
+        return;
+      }
+
+      const div = document.createElement("div");
+
+      const sent = message.senderId === currentUser.uid;
+
+      div.className = sent ? "message sent" : "message received";
+      div.dataset.msgId = msgId;
+
+      let time = "";
+
+      if (message.createdAt) {
+        time = message.createdAt.toDate().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      }
+
+      // Deleted for everyone
+      if (message.deletedForEveryone) {
+        div.classList.add("deleted");
+        div.innerHTML = `
+          <em>🚫 Ye message delete kar diya gaya</em>
+          <span class="message-time">${time}</span>
+        `;
+      } else {
+        div.innerHTML = `
+          <span class="msg-text">${safe(message.text || "")}</span>
+          <span class="message-time">
+            ${time}
+            ${sent ? " ✓" : ""}
+          </span>
+        `;
+      }
+
+      attachDeleteHandler(div, msgId, message, sent);
+
+      messagesBox.appendChild(div);
+
+    });
+
+    messagesBox.scrollTop = messagesBox.scrollHeight;
+
+  });
+
+}
+
+
+// ==================== DELETE HANDLER (long press / right click) ====================
+function attachDeleteHandler(div, msgId, message, sent) {
+
+  let pressTimer = null;
+  let longPressed = false;
+
+  const startPress = () => {
+    longPressed = false;
+    pressTimer = setTimeout(() => {
+      longPressed = true;
+      openDeleteMenu(msgId, message, sent);
+    }, 500);
+  };
+
+  const cancelPress = () => {
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+  };
+
+  // Mobile: touch
+  div.addEventListener("touchstart", startPress, { passive: true });
+  div.addEventListener("touchend", cancelPress);
+  div.addEventListener("touchmove", cancelPress);
+  div.addEventListener("touchcancel", cancelPress);
+
+  // Desktop: mouse hold
+  div.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    startPress();
+  });
+  div.addEventListener("mouseup", cancelPress);
+  div.addEventListener("mouseleave", cancelPress);
+
+  // Desktop: right click
+  div.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    openDeleteMenu(msgId, message, sent);
+  });
+
+}
+
+
+// =
