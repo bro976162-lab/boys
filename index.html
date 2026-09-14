@@ -9,9 +9,8 @@
 
 <body>
 
-  <!-- AUTH SCREEN -->
+  <!-- ===== AUTH SCREEN ===== -->
   <div id="authScreen" class="auth-screen">
-
     <div class="auth-box">
       <div class="logo">BOYS</div>
       <p class="subtitle">Connect with your friends</p>
@@ -21,36 +20,17 @@
         <button id="signupTab">Sign Up</button>
       </div>
 
-      <input
-        id="nameInput"
-        type="text"
-        placeholder="Your name"
-        class="signup-only"
-      >
+      <input id="nameInput" type="text" placeholder="Your name" class="signup-only">
+      <input id="emailInput" type="email" placeholder="Email address">
+      <input id="passwordInput" type="password" placeholder="Password">
 
-      <input
-        id="emailInput"
-        type="email"
-        placeholder="Email address"
-      >
-
-      <input
-        id="passwordInput"
-        type="password"
-        placeholder="Password"
-      >
-
-      <button id="authButton" class="auth-button">
-        Login
-      </button>
-
+      <button id="authButton" class="auth-button">Login</button>
       <p id="authMessage" class="auth-message"></p>
     </div>
-
   </div>
 
 
-  <!-- MAIN APP -->
+  <!-- ===== MAIN APP ===== -->
   <div id="app" class="app hidden">
 
     <aside class="sidebar">
@@ -61,41 +41,56 @@
           <span id="myStatus">Offline</span>
         </div>
 
-        <button id="logoutButton" class="logout-btn">
-          Logout
-        </button>
+        <button id="logoutButton" class="logout-btn">Logout</button>
       </div>
 
-      <div class="my-profile">
+      <!-- Tabs: Chats / Status -->
+      <div class="sidebar-tabs">
+        <button id="chatsTabBtn" class="sidebar-tab active">💬 Chats</button>
+        <button id="statusTabBtn" class="sidebar-tab">📸 Status</button>
+      </div>
 
-        <div class="avatar" id="myAvatar">
-          B
+      <!-- ===== CHATS VIEW ===== -->
+      <div id="chatsView" class="sidebar-view">
+
+        <div class="my-profile">
+          <div class="avatar" id="myAvatar">B</div>
+          <div>
+            <strong id="myName">User</strong>
+            <small id="myEmail">email</small>
+          </div>
         </div>
 
-        <div>
-          <strong id="myName">User</strong>
-          <small id="myEmail">email</small>
+        <div class="search-box">
+          <input id="searchInput" type="text" placeholder="Search users...">
+        </div>
+
+        <div id="usersList" class="users-list">
+          <p class="loading">Loading users...</p>
         </div>
 
       </div>
 
+      <!-- ===== STATUS VIEW ===== -->
+      <div id="statusView" class="sidebar-view hidden">
 
-      <div class="search-box">
+        <!-- My Status -->
+        <div class="status-mine" id="myStatusCard">
+          <div class="status-avatar-wrap">
+            <div class="avatar" id="statusMyAvatar">B</div>
+            <div class="add-status-badge">+</div>
+          </div>
+          <div>
+            <strong>My Status</strong>
+            <small id="myStatusSub">Tap to add status update</small>
+          </div>
+        </div>
 
-        <input
-          id="searchInput"
-          type="text"
-          placeholder="Search users..."
-        >
-
-      </div>
-
-
-      <div id="usersList" class="users-list">
-
-        <p class="loading">
-          Loading users...
-        </p>
+        <!-- Recent updates -->
+        <div class="status-section-title">Recent updates</div>
+        <div id="statusList" class="status-list">
+          <p class="loading">Loading status...</p>
+        </div>
 
       </div>
 
@@ -105,75 +100,27 @@
     <main class="chat-area">
 
       <div id="emptyChat" class="empty-chat">
-
-        <div class="empty-icon">
-          💬
-        </div>
-
-        <h2>
-          Welcome to BOYS
-        </h2>
-
-        <p>
-          Select a user to start chatting.
-        </p>
-
+        <div class="empty-icon">💬</div>
+        <h2>Welcome to BOYS</h2>
+        <p>Select a user to start chatting.</p>
       </div>
-
 
       <div id="chatBox" class="chat-box hidden">
 
         <header class="chat-header">
-
-          <button
-            id="backButton"
-            class="back-btn"
-          >
-            ←
-          </button>
-
-          <div
-            class="chat-avatar"
-            id="chatAvatar"
-          >
-            U
-          </div>
-
+          <button id="backButton" class="back-btn">←</button>
+          <div class="chat-avatar" id="chatAvatar">U</div>
           <div class="chat-user-info">
-
-            <strong id="chatName">
-              User
-            </strong>
-
-            <span id="chatStatus">
-              Offline
-            </span>
-
+            <strong id="chatName">User</strong>
+            <span id="chatStatus">Offline</span>
           </div>
-
         </header>
 
-
-        <div
-          id="messages"
-          class="messages"
-        >
-        </div>
-
+        <div id="messages" class="messages"></div>
 
         <div class="message-area">
-
-          <input
-            id="messageInput"
-            type="text"
-            placeholder="Type a message..."
-            autocomplete="off"
-          >
-
-          <button id="sendButton">
-            ➤
-          </button>
-
+          <input id="messageInput" type="text" placeholder="Type a message..." autocomplete="off">
+          <button id="sendButton">➤</button>
         </div>
 
       </div>
@@ -183,42 +130,130 @@
   </div>
 
 
-  <!-- MESSAGE CONTEXT MENU (right click / long press) -->
+  <!-- ===== MESSAGE CONTEXT MENU ===== -->
   <div id="msgMenu" class="msg-menu hidden">
     <div class="msg-menu-content">
-      <button class="msg-option" id="menuCopy">
-        📋 Copy
+      <button class="msg-option" id="menuCopy">📋 Copy</button>
+      <button class="msg-option" id="menuSelect">✅ Select</button>
+      <button class="msg-option danger" id="menuDelete">🗑️ Delete</button>
+    </div>
+  </div>
+
+
+  <!-- ===== DELETE SUB-MENU ===== -->
+  <div id="deleteMenu" class="msg-menu hidden">
+    <div class="msg-menu-content">
+      <button class="msg-option danger" id="deleteForMe">🗑️ Delete for me</button>
+      <button class="msg-option danger" id="deleteForEveryone">🗑️ Delete for everyone</button>
+      <button class="msg-option cancel" id="deleteCancel">✖ Cancel</button>
+    </div>
+  </div>
+
+
+  <!-- ===== ADD STATUS MODAL ===== -->
+  <div id="addStatusModal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Add Status</h3>
+        <button class="modal-close" id="closeAddStatus">✖</button>
+      </div>
+
+      <div class="modal-body">
+        <textarea id="statusText" placeholder="Type your status..." rows="4" maxlength="200"></textarea>
+
+        <div class="status-preview hidden" id="statusPreview">
+          <img id="statusPreviewImg" src="" alt="preview">
+        </div>
+
+        <div class="status-img-row">
+          <label for="statusImage" class="status-img-btn">
+            📷 Add Photo
+          </label>
+          <input type="file" id="statusImage" accept="image/*" class="hidden">
+          <small id="statusImgName"></small>
+        </div>
+
+        <div class="bg-color-row">
+          <span>Background:</span>
+          <button class="bg-color-btn" data-bg="#2563eb" style="background:#2563eb"></button>
+          <button class="bg-color-btn" data-bg="#16a34a" style="background:#16a34a"></button>
+          <button class="bg-color-btn" data-bg="#dc2626" style="background:#dc2626"></button>
+          <button class="bg-color-btn" data-bg="#9333ea" style="background:#9333ea"></button>
+          <button class="bg-color-btn" data-bg="#ea580c" style="background:#ea580c"></button>
+          <button class="bg-color-btn" data-bg="#000000" style="background:#000000"></button>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="postStatusBtn" class="primary-btn">Post Status</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===== STATUS VIEWER ===== -->
+  <div id="statusViewer" class="status-viewer hidden">
+    <div class="status-progress-bar" id="statusProgress"></div>
+
+    <div class="status-viewer-header">
+      <div class="avatar" id="viewerAvatar">U</div>
+      <div class="viewer-info">
+        <strong id="viewerName">User</strong>
+        <small id="viewerTime">just now</small>
+      </div>
+      <button class="viewer-close" id="closeViewer">✖</button>
+    </div>
+
+    <div class="status-content" id="statusContent"></div>
+
+    <!-- Owner controls: viewers, likes -->
+    <div class="status-owner-bar hidden" id="statusOwnerBar">
+      <button class="owner-btn" id="ownerViewersBtn">
+        👁️ <span id="viewerCount">0</span>
       </button>
-      <button class="msg-option" id="menuSelect">
-        ✅ Select
+      <button class="owner-btn" id="ownerLikesBtn">
+        ❤️ <span id="likeCount">0</span>
       </button>
-      <button class="msg-option danger" id="menuDelete">
+      <button class="owner-btn danger" id="ownerDeleteBtn">
         🗑️ Delete
       </button>
     </div>
-  </div>
 
-
-  <!-- DELETE SUB-MENU -->
-  <div id="deleteMenu" class="msg-menu hidden">
-    <div class="msg-menu-content">
-      <button class="msg-option danger" id="deleteForMe">
-        🗑️ Delete for me
+    <!-- Viewer controls: like -->
+    <div class="status-viewer-bar hidden" id="statusViewerBar">
+      <button class="like-status-btn" id="likeStatusBtn">
+        ❤️ Like
       </button>
-      <button class="msg-option danger" id="deleteForEveryone">
-        🗑️ Delete for everyone
-      </button>
-      <button class="msg-option cancel" id="deleteCancel">
-        ✖ Cancel
-      </button>
+      <input id="statusReplyInput" placeholder="Reply..." class="hidden">
     </div>
   </div>
 
 
-  <script
-    type="module"
-    src="boys3.js"
-  ></script>
+  <!-- ===== VIEWERS LIST MODAL ===== -->
+  <div id="viewersModal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="viewersModalTitle">Viewers</h3>
+        <button class="modal-close" id="closeViewersModal">✖</button>
+      </div>
+      <div class="modal-body">
+        <div id="viewersList" class="viewers-list"></div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===== BROWSER NOTIFICATION TOAST ===== -->
+  <div id="notifToast" class="notif-toast hidden">
+    <div class="notif-icon">💬</div>
+    <div class="notif-body">
+      <strong id="notifName">User</strong>
+      <small id="notifText">sent a message</small>
+    </div>
+  </div>
+
+
+  <script type="module" src="boys3.js"></script>
 
 </body>
 </html>
