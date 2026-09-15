@@ -25,8 +25,16 @@ import {
   serverTimestamp,
   updateDoc,
   arrayUnion,
+  arrayRemove,
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
 
 // ==================== FIREBASE ====================
@@ -43,6 +51,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 
 // ==================== ELEMENTS ====================
@@ -86,7 +95,6 @@ const backButton = document.getElementById("backButton");
 // Context menu
 const msgMenu = document.getElementById("msgMenu");
 const menuCopy = document.getElementById("menuCopy");
-const menuSelect = document.getElementById("menuSelect");
 const menuDelete = document.getElementById("menuDelete");
 
 // Delete sub-menu
@@ -95,15 +103,62 @@ const deleteForMe = document.getElementById("deleteForMe");
 const deleteForEveryone = document.getElementById("deleteForEveryone");
 const deleteCancel = document.getElementById("deleteCancel");
 
+// Sidebar tabs
+const chatsTabBtn = document.getElementById("chatsTabBtn");
+const statusTabBtn = document.getElementById("statusTabBtn");
+const chatsView = document.getElementById("chatsView");
+const statusView = document.getElementById("statusView");
+
+// Status
+const myStatusCard = document.getElementById("myStatusCard");
+const statusMyAvatar = document.getElementById("statusMyAvatar");
+const myStatusSub = document.getElementById("myStatusSub");
+const statusList = document.getElementById("statusList");
+
+const addStatusModal = document.getElementById("addStatusModal");
+const closeAddStatus = document.getElementById("closeAddStatus");
+const statusText = document.getElementById("statusText");
+const statusImage = document.getElementById("statusImage");
+const statusImgName = document.getElementById("statusImgName");
+const statusPreview = document.getElementById("statusPreview");
+const statusPreviewImg = document.getElementById("statusPreviewImg");
+const postStatusBtn = document.getElementById("postStatusBtn");
+
+const statusViewer = document.getElementById("statusViewer");
+const statusContent = document.getElementById("statusContent");
+const closeViewer = document.getElementById("closeViewer");
+const viewerAvatar = document.getElementById("viewerAvatar");
+const viewerName = document.getElementById("viewerName");
+const viewerTime = document.getElementById("viewerTime");
+
+const statusOwnerBar = document.getElementById("statusOwnerBar");
+const statusViewerBar = document.getElementById("statusViewerBar");
+const ownerViewersBtn = document.getElementById("ownerViewersBtn");
+const ownerLikesBtn = document.getElementById("ownerLikesBtn");
+const ownerDeleteBtn = document.getElementById("ownerDeleteBtn");
+const viewerCount = document.getElementById("viewerCount");
+const likeCount = document.getElementById("likeCount");
+const likeStatusBtn = document.getElementById("likeStatusBtn");
+
+const viewersModal = document.getElementById("viewersModal");
+const closeViewersModal = document.getElementById("closeViewersModal");
+const viewersList = document.getElementById("viewersList");
+const viewersModalTitle = document.getElementById("viewersModalTitle");
+
+const toastEl = document.getElementById("toast");
+
 
 // ==================== STATE ====================
 let signupMode = false;
 let currentUser = null;
+let currentUserData = null;
 let selectedUser = null;
 let allUsers = [];
+let allStatuses = [];
 let stopUsers = null;
 let stopMessages = null;
 let stopSelectedUser = null;
+let stopStatuses = null;
 
 let heartbeatInterval = null;
 let idleTimer = null;
@@ -111,8 +166,10 @@ let isOnline = false;
 let activityListenersAttached = false;
 
 let pendingMsg = null;
-let selectedMessages = new Set();
-let isSelectMode = false;
+let pendingStatusImage = null;
+let selectedBgColor = "#2563eb";
+let currentViewingStatus = null;
+let statusTimeout = null;
 
 
 // ==================== LOGIN TAB ====================
@@ -243,6 +300,7 @@ onAuthStateChanged(auth, async (user) => {
   await setUserOnline(true);
   startPresence();
   loadUsers();
+  loadStatuses();
 
 });
 
@@ -255,11 +313,12 @@ async function loadProfile() {
 
   if (snap.exists()) {
 
-    const data = snap.data();
+    currentUserData = snap.data();
 
-    myName.textContent = data.name || "User";
-    myEmail.textContent = data.email || currentUser.email;
-    myAvatar.textContent = initials(data.name);
+    myName.textContent = currentUserData.name || "User";
+    myEmail.textContent = currentUserData.email || currentUser.email;
+    myAvatar.textContent = initials(currentUserData.name);
+    statusMyAvatar.textContent = initials(currentUserData.name);
 
   }
 
@@ -610,7 +669,6 @@ function loadMessages() {
 
     messages.forEach(({ id: msgId, data: message }) => {
 
-      // Delete for me filter
       const deletedFor = message.deletedFor || [];
       if (deletedFor.includes(currentUser.uid)) {
         return;
@@ -622,6 +680,7 @@ function loadMessages() {
       div.className = sent ? "message sent" : "message received";
       div.dataset.msgId = msgId;
       div.dataset.sent = sent ? "1" : "0";
+      div.dataset.read = message.read ? "1" : "0";
 
       let time = "";
 
@@ -632,17 +691,14 @@ function loadMessages() {
         });
       }
 
-      // Ticks sirf apne bheje messages pe
       let tickHTML = "";
 
       if (sent && !message.deletedForEveryone) {
-
         if (message.read) {
           tickHTML = `<span class="tick double read">✓✓</span>`;
         } else {
           tickHTML = `<span class="tick double">✓✓</span>`;
         }
-
       }
 
       if (message.deletedForEveryone) {
@@ -661,7 +717,6 @@ function loadMessages() {
         `;
       }
 
-      // Long press / right click handler
       attachMessageHandlers(div, msgId, message, sent);
 
       messagesBox.appendChild(div);
@@ -670,7 +725,6 @@ function loadMessages() {
 
     messagesBox.scrollTop = messagesBox.scrollHeight;
 
-    // 🔥 Read receipts — jo messages receiver ne nahi padhe, unko read mark karo
     markMessagesAsRead();
 
   });
@@ -685,46 +739,12 @@ async function markMessagesAsRead() {
 
   const id = chatId(currentUser.uid, selectedUser.uid);
 
-  try {
-
-    const q = query(
-      collection(db, "chats", id, "messages"),
-      orderBy("createdAt")
-    );
-
-    const snapshot = await new Promise((resolve, reject) => {
-      // one-time get
-      const { getDocs } = window.firebaseHelpers || {};
-      // Use onSnapshot once but we need getDocs. Let's import dynamically.
-      resolve(null);
-    });
-
-  } catch (err) {
-    // ignore
-  }
-
-  // Simpler: iterate messagesBox children
   const messageEls = messagesBox.querySelectorAll(".message.received");
 
   if (messageEls.length === 0) return;
 
   const batch = writeBatch(db);
-
   let hasUpdates = false;
-
-  messageEls.forEach((el) => {
-
-    const msgId = el.dataset.msgId;
-
-    // Check karo agar ye already read hai to skip
-    // Hum data attributes store kar sakte hain — but easier: read from snapshot
-    // Use simple approach: update all received unread
-
-  });
-
-  // Alternative simpler: directly update all received messages where read=false
-  // We'll do it by iterating our cached messages
-  // But since we don't have cache, let's attach read status via dataset
 
   messageEls.forEach((el) => {
 
@@ -755,29 +775,16 @@ async function markMessagesAsRead() {
 // ==================== MESSAGE HANDLERS ====================
 function attachMessageHandlers(div, msgId, message, sent) {
 
-  // Store read status in dataset for markMessagesAsRead
-  if (message.read) {
-    div.dataset.read = "1";
-  } else {
-    div.dataset.read = "0";
-  }
-
   let pressTimer = null;
-  let longPressed = false;
   let startX = 0;
   let startY = 0;
 
   const startPress = (x, y) => {
-
-    longPressed = false;
     startX = x;
     startY = y;
-
     pressTimer = setTimeout(() => {
-      longPressed = true;
       openContextMenu(div, msgId, message, sent, x, y);
     }, 500);
-
   };
 
   const cancelPress = () => {
@@ -787,7 +794,6 @@ function attachMessageHandlers(div, msgId, message, sent) {
     }
   };
 
-  // Mobile: touch
   div.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
     startPress(t.clientX, t.clientY);
@@ -803,7 +809,6 @@ function attachMessageHandlers(div, msgId, message, sent) {
     if (dx > 10 || dy > 10) cancelPress();
   });
 
-  // Desktop: mouse hold
   div.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
     startPress(e.clientX, e.clientY);
@@ -812,7 +817,6 @@ function attachMessageHandlers(div, msgId, message, sent) {
   div.addEventListener("mouseup", cancelPress);
   div.addEventListener("mouseleave", cancelPress);
 
-  // Desktop: right click
   div.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     openContextMenu(div, msgId, message, sent, e.clientX, e.clientY);
@@ -824,16 +828,7 @@ function attachMessageHandlers(div, msgId, message, sent) {
 // ==================== OPEN CONTEXT MENU ====================
 function openContextMenu(div, msgId, message, sent, x, y) {
 
-  // Agar delete-for-everyone hai to menu na dikhao
-  if (message.deletedForEveryone) {
-    return;
-  }
-
-  // Agar select mode me hai to select toggle karo
-  if (isSelectMode) {
-    toggleSelect(div, msgId);
-    return;
-  }
+  if (message.deletedForEveryone) return;
 
   pendingMsg = {
     id: msgId,
@@ -842,7 +837,6 @@ function openContextMenu(div, msgId, message, sent, x, y) {
     element: div
   };
 
-  // "Delete for everyone" option sirf apne messages pe
   if (!sent) {
     deleteForEveryone.style.display = "none";
   } else {
@@ -853,12 +847,9 @@ function openContextMenu(div, msgId, message, sent, x, y) {
 
   const content = msgMenu.querySelector(".msg-menu-content");
 
-  // Desktop: position at cursor
   if (window.innerWidth > 700) {
 
     content.style.position = "fixed";
-
-    // Reset pehle
     content.style.left = "0px";
     content.style.top = "0px";
 
@@ -867,7 +858,6 @@ function openContextMenu(div, msgId, message, sent, x, y) {
     let left = x;
     let top = y;
 
-    // Screen se bahar na jaye
     if (left + rect.width > window.innerWidth - 10) {
       left = window.innerWidth - rect.width - 10;
     }
@@ -884,13 +874,11 @@ function openContextMenu(div, msgId, message, sent, x, y) {
 }
 
 
-// ==================== CLOSE CONTEXT MENU ====================
 function closeContextMenu() {
   msgMenu.classList.add("hidden");
   pendingMsg = null;
 }
 
-// Click outside
 msgMenu.addEventListener("click", (e) => {
   if (e.target === msgMenu || e.target.classList.contains("msg-menu-content")) {
     closeContextMenu();
@@ -906,11 +894,9 @@ menuCopy.addEventListener("click", async () => {
   const text = pendingMsg.data.text || "";
 
   try {
-
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(text);
     } else {
-      // Fallback
       const ta = document.createElement("textarea");
       ta.value = text;
       document.body.appendChild(ta);
@@ -918,10 +904,7 @@ menuCopy.addEventListener("click", async () => {
       document.execCommand("copy");
       document.body.removeChild(ta);
     }
-
-    // Feedback
     showToast("✅ Copied!");
-
   } catch (err) {
     console.error("Copy error:", err);
     showToast("❌ Copy fail hua");
@@ -932,52 +915,11 @@ menuCopy.addEventListener("click", async () => {
 });
 
 
-// ==================== MENU: SELECT ====================
-menuSelect.addEventListener("click", () => {
-
-  if (!pendingMsg) return;
-
-  isSelectMode = true;
-  selectedMessages.clear();
-
-  if (pendingMsg.element) {
-    toggleSelect(pendingMsg.element, pendingMsg.id);
-  }
-
-  closeContextMenu();
-
-  showToast("Select mode ON — message pe tap karo");
-
-});
-
-
-function toggleSelect(div, msgId) {
-
-  if (selectedMessages.has(msgId)) {
-    selectedMessages.delete(msgId);
-    div.classList.remove("selected");
-  } else {
-    selectedMessages.add(msgId);
-    div.classList.add("selected");
-  }
-
-  // Agar koi message select nahi raha to select mode off
-  if (selectedMessages.size === 0) {
-    isSelectMode = false;
-  }
-
-}
-
-
 // ==================== MENU: DELETE ====================
 menuDelete.addEventListener("click", () => {
-
   if (!pendingMsg) return;
-
-  // Delete sub-menu kholo
   msgMenu.classList.add("hidden");
   deleteMenu.classList.remove("hidden");
-
 });
 
 
@@ -990,14 +932,10 @@ deleteForMe.addEventListener("click", async () => {
   const id_chat = chatId(currentUser.uid, selectedUser.uid);
 
   try {
-
     await updateDoc(
       doc(db, "chats", id_chat, "messages", id),
-      {
-        deletedFor: arrayUnion(currentUser.uid)
-      }
+      { deletedFor: arrayUnion(currentUser.uid) }
     );
-
   } catch (err) {
     console.error("Delete for me error:", err);
     showToast("❌ Delete fail hua");
@@ -1024,7 +962,6 @@ deleteForEveryone.addEventListener("click", async () => {
   const id_chat = chatId(currentUser.uid, selectedUser.uid);
 
   try {
-
     await updateDoc(
       doc(db, "chats", id_chat, "messages", id),
       {
@@ -1033,7 +970,6 @@ deleteForEveryone.addEventListener("click", async () => {
         deletedAt: serverTimestamp()
       }
     );
-
   } catch (err) {
     console.error("Delete for everyone error:", err);
     showToast("❌ Delete fail hua");
@@ -1082,7 +1018,6 @@ async function sendMessage() {
   const id = chatId(currentUser.uid, selectedUser.uid);
 
   try {
-
     await addDoc(
       collection(db, "chats", id, "messages"),
       {
@@ -1097,7 +1032,6 @@ async function sendMessage() {
     );
 
     messageInput.value = "";
-
     messagesBox.scrollTop = messagesBox.scrollHeight;
 
   } catch (err) {
@@ -1112,7 +1046,6 @@ async function sendMessage() {
 logoutButton.addEventListener("click", async () => {
 
   if (currentUser) {
-
     await setDoc(
       doc(db, "users", currentUser.uid),
       {
@@ -1121,7 +1054,6 @@ logoutButton.addEventListener("click", async () => {
       },
       { merge: true }
     );
-
   }
 
   stopPresence();
@@ -1156,21 +1088,33 @@ backButton.addEventListener("click", () => {
 });
 
 
+// ==================== SIDEBAR TABS ====================
+chatsTabBtn.addEventListener("click", () => {
+  chatsTabBtn.classList.add("active");
+  statusTabBtn.classList.remove("active");
+  chatsView.classList.remove("hidden");
+  statusView.classList.add("hidden");
+});
+
+statusTabBtn.addEventListener("click", () => {
+  statusTabBtn.classList.add("active");
+  chatsTabBtn.classList.remove("active");
+  statusView.classList.remove("hidden");
+  chatsView.classList.add("hidden");
+});
+
+
 // ==================== TOAST ====================
 function showToast(msg) {
 
-  const toast = document.createElement("div");
-  toast.className = "toast";
-  toast.textContent = msg;
-  document.body.appendChild(toast);
+  toastEl.textContent = msg;
+  toastEl.classList.remove("hidden");
+
+  setTimeout(() => toastEl.classList.add("show"), 10);
 
   setTimeout(() => {
-    toast.classList.add("show");
-  }, 10);
-
-  setTimeout(() => {
-    toast.classList.remove("show");
-    setTimeout(() => toast.remove(), 300);
+    toastEl.classList.remove("show");
+    setTimeout(() => toastEl.classList.add("hidden"), 300);
   }, 2000);
 
 }
@@ -1223,6 +1167,574 @@ function timeAgo(date) {
   return date.toLocaleDateString();
 
 }
+
+
+// ==================== STATUS SYSTEM ====================
+
+// Post status button click
+postStatusBtn.addEventListener("click", postStatus);
+
+// My status card click → open add modal
+myStatusCard.addEventListener("click", () => {
+  openAddStatusModal();
+});
+
+// Close add modal
+closeAddStatus.addEventListener("click", closeAddStatusModal);
+
+// Background color select
+document.querySelectorAll(".bg-color-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".bg-color-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    selectedBgColor = btn.dataset.bg;
+  });
+});
+
+// Image select
+statusImage.addEventListener("change", (e) => {
+
+  const file = e.target.files[0];
+
+  if (!file) {
+    pendingStatusImage = null;
+    statusPreview.classList.add("hidden");
+    statusImgName.textContent = "";
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    showToast("❌ Image 5MB se kam honi chahiye");
+    statusImage.value = "";
+    return;
+  }
+
+  pendingStatusImage = file;
+  statusImgName.textContent = file.name;
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    statusPreviewImg.src = ev.target.result;
+    statusPreview.classList.remove("hidden");
+  };
+  reader.readAsDataURL(file);
+
+});
+
+
+// Open add status modal
+function openAddStatusModal() {
+
+  statusText.value = "";
+  statusImage.value = "";
+  statusImgName.textContent = "";
+  pendingStatusImage = null;
+  statusPreview.classList.add("hidden");
+  selectedBgColor = "#2563eb";
+
+  document.querySelectorAll(".bg-color-btn").forEach((b) => b.classList.remove("active"));
+  const firstBtn = document.querySelector('.bg-color-btn[data-bg="#2563eb"]');
+  if (firstBtn) firstBtn.classList.add("active");
+
+  addStatusModal.classList.remove("hidden");
+
+}
+
+
+// Close add status modal
+function closeAddStatusModal() {
+  addStatusModal.classList.add("hidden");
+  pendingStatusImage = null;
+}
+
+
+// Post status
+async function postStatus() {
+
+  if (!currentUser) return;
+
+  const text = statusText.value.trim();
+
+  if (!text && !pendingStatusImage) {
+    showToast("❌ Kuch text likho ya photo chuno");
+    return;
+  }
+
+  postStatusBtn.disabled = true;
+  postStatusBtn.textContent = "Posting...";
+
+  try {
+
+    let imageUrl = "";
+    let type = "text";
+
+    // Upload image if any
+    if (pendingStatusImage) {
+
+      const path = `status/${currentUser.uid}/${Date.now()}_${pendingStatusImage.name}`;
+      const fileRef = storageRef(storage, path);
+
+      await uploadBytes(fileRef, pendingStatusImage);
+      imageUrl = await getDownloadURL(fileRef);
+      type = "image";
+
+    }
+
+    const now = Date.now();
+
+    await addDoc(
+      collection(db, "status"),
+      {
+        userId: currentUser.uid,
+        userName: currentUserData?.name || "User",
+        userEmail: currentUserData?.email || "",
+        text: text,
+        imageUrl: imageUrl,
+        type: type,
+        bgColor: selectedBgColor,
+        createdAt: serverTimestamp(),
+        expiresAt: now + (24 * 60 * 60 * 1000),
+        viewers: [],
+        likes: []
+      }
+    );
+
+    showToast("✅ Status posted!");
+
+    closeAddStatusModal();
+
+  } catch (err) {
+    console.error("Post status error:", err);
+    showToast("❌ Status post nahi hua");
+  }
+
+  postStatusBtn.disabled = false;
+  postStatusBtn.textContent = "Post Status";
+
+}
+
+
+// ==================== LOAD STATUSES ====================
+function loadStatuses() {
+
+  if (stopStatuses) stopStatuses();
+
+  const q = query(
+    collection(db, "status"),
+    orderBy("createdAt", "desc")
+  );
+
+  stopStatuses = onSnapshot(q, (snapshot) => {
+
+    const now = Date.now();
+    allStatuses = [];
+
+    snapshot.forEach((item) => {
+
+      const data = item.data();
+
+      // Skip expired
+      if (data.expiresAt && data.expiresAt < now) return;
+      // Skip if createdAt is null (not yet set)
+      if (!data.createdAt) return;
+
+      allStatuses.push({
+        id: item.id,
+        ...data
+      });
+
+    });
+
+    showStatuses();
+
+  }, (error) => {
+    console.error("Status load error:", error);
+    statusList.innerHTML =
+      `<p class="loading">Status load nahi ho raha.</p>`;
+  });
+
+}
+
+
+// ==================== SHOW STATUSES ====================
+function showStatuses() {
+
+  statusList.innerHTML = "";
+
+  const now = Date.now();
+
+  // Group by userId (latest status per user)
+  const grouped = {};
+
+  allStatuses.forEach((s) => {
+
+    if (!grouped[s.userId]) {
+      grouped[s.userId] = [];
+    }
+
+    grouped[s.userId].push(s);
+
+  });
+
+  // Filter my status
+  const otherUsersStatus = Object.keys(grouped).filter(
+    (uid) => uid !== currentUser.uid
+  );
+
+  // Check my own status
+  const myStatuses = grouped[currentUser.uid] || [];
+
+  if (myStatuses.length > 0) {
+    myStatusSub.textContent = `${myStatuses.length} update${myStatuses.length > 1 ? "s" : ""} · Tap to view`;
+  } else {
+    myStatusSub.textContent = "Tap to add status update";
+  }
+
+  if (otherUsersStatus.length === 0) {
+    statusList.innerHTML =
+      `<p class="loading">Abhi koi status nahi hai</p>`;
+    return;
+  }
+
+  // Sort by latest
+  otherUsersStatus.sort((a, b) => {
+    const aLatest = grouped[a][0].createdAt?.toDate?.()?.getTime() || 0;
+    const bLatest = grouped[b][0].createdAt?.toDate?.()?.getTime() || 0;
+    return bLatest - aLatest;
+  });
+
+  otherUsersStatus.forEach((uid) => {
+
+    const userStatuses = grouped[uid];
+    const latest = userStatuses[0];
+
+    // Check if I have seen this status
+    const hasViewed = userStatuses.every((s) =>
+      (s.viewers || []).includes(currentUser.uid)
+    );
+
+    const div = document.createElement("div");
+    div.className = "status-item";
+
+    let timeText = "";
+    if (latest.createdAt) {
+      const date = latest.createdAt.toDate();
+      timeText = timeAgo(date);
+    }
+
+    div.innerHTML = `
+      <div class="status-ring ${hasViewed ? "viewed" : ""}">
+        <div class="status-ring-inner">
+          ${initials(latest.userName)}
+        </div>
+      </div>
+      <div class="status-info">
+        <strong>${safe(latest.userName || "User")}</strong>
+        <small>${timeText}</small>
+      </div>
+      ${userStatuses.length > 1 ? `<div class="status-badge">${userStatuses.length}</div>` : ""}
+    `;
+
+    div.addEventListener("click", () => {
+      openStatusViewer(userStatuses, 0);
+    });
+
+    statusList.appendChild(div);
+
+  });
+
+}
+
+
+// ==================== OPEN STATUS VIEWER ====================
+function openStatusViewer(statuses, index) {
+
+  if (!statuses || statuses.length === 0) return;
+
+  if (index >= statuses.length) {
+    closeStatusViewer();
+    return;
+  }
+
+  currentViewingStatus = { statuses, index };
+  const status = statuses[index];
+
+  const isMine = status.userId === currentUser.uid;
+
+  viewerName.textContent = status.userName || "User";
+  viewerAvatar.textContent = initials(status.userName);
+
+  if (status.createdAt) {
+    viewerTime.textContent = timeAgo(status.createdAt.toDate());
+  }
+
+  // Content
+  statusContent.innerHTML = "";
+
+  if (status.type === "image" && status.imageUrl) {
+    const img = document.createElement("img");
+    img.src = status.imageUrl;
+    img.alt = "status";
+    statusContent.appendChild(img);
+  } else {
+    const div = document.createElement("div");
+    div.className = "status-text";
+    div.style.background = status.bgColor || "#2563eb";
+    div.textContent = status.text || "";
+    statusContent.appendChild(div);
+  }
+
+  // Owner controls
+  if (isMine) {
+    statusOwnerBar.classList.remove("hidden");
+    statusViewerBar.classList.add("hidden");
+
+    viewerCount.textContent = (status.viewers || []).length;
+    likeCount.textContent = (status.likes || []).length;
+  } else {
+    statusOwnerBar.classList.add("hidden");
+    statusViewerBar.classList.remove("hidden");
+
+    // Check if liked
+    const isLiked = (status.likes || []).includes(currentUser.uid);
+    if (isLiked) {
+      likeStatusBtn.classList.add("liked");
+      likeStatusBtn.textContent = "❤️ Liked";
+    } else {
+      likeStatusBtn.classList.remove("liked");
+      likeStatusBtn.textContent = "❤️ Like";
+    }
+
+    // Mark as viewed
+    markStatusViewed(status.id);
+
+  }
+
+  // Show viewer
+  statusViewer.classList.remove("hidden");
+
+  // Progress bar animation — reset
+  const bar = document.getElementById("statusProgress");
+  bar.style.animation = "none";
+  void bar.offsetWidth;
+  bar.style.animation = "";
+
+  // Auto-next after 5 sec
+  if (statusTimeout) clearTimeout(statusTimeout);
+  statusTimeout = setTimeout(() => {
+    nextStatus();
+  }, 5000);
+
+}
+
+
+// Close status viewer
+function closeStatusViewer() {
+
+  if (statusTimeout) {
+    clearTimeout(statusTimeout);
+    statusTimeout = null;
+  }
+
+  statusViewer.classList.add("hidden");
+  currentViewingStatus = null;
+
+}
+
+
+// Next status
+function nextStatus() {
+
+  if (!currentViewingStatus) return;
+
+  const { statuses, index } = currentViewingStatus;
+
+  if (index + 1 < statuses.length) {
+    openStatusViewer(statuses, index + 1);
+  } else {
+    closeStatusViewer();
+  }
+
+}
+
+
+// Close viewer button
+closeViewer.addEventListener("click", closeStatusViewer);
+
+// Click on status content to skip to next
+statusContent.addEventListener("click", () => {
+  nextStatus();
+});
+
+
+// ==================== MARK STATUS VIEWED ====================
+async function markStatusViewed(statusId) {
+
+  try {
+
+    const ref = doc(db, "status", statusId);
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+    const viewers = data.viewers || [];
+
+    if (viewers.includes(currentUser.uid)) return;
+
+    await updateDoc(ref, {
+      viewers: arrayUnion(currentUser.uid)
+    });
+
+  } catch (err) {
+    console.error("Mark viewed error:", err);
+  }
+
+}
+
+
+// ==================== LIKE STATUS ====================
+likeStatusBtn.addEventListener("click", async () => {
+
+  if (!currentViewingStatus) return;
+
+  const { statuses, index } = currentViewingStatus;
+  const status = statuses[index];
+
+  if (status.userId === currentUser.uid) return;
+
+  const statusId = status.id;
+  const isLiked = (status.likes || []).includes(currentUser.uid);
+
+  try {
+
+    const ref = doc(db, "status", statusId);
+
+    if (isLiked) {
+      await updateDoc(ref, {
+        likes: arrayRemove(currentUser.uid)
+      });
+      showToast("💔 Like removed");
+    } else {
+      await updateDoc(ref, {
+        likes: arrayUnion(currentUser.uid)
+      });
+      showToast("❤️ Liked!");
+    }
+
+  } catch (err) {
+    console.error("Like error:", err);
+  }
+
+});
+
+
+// ==================== VIEWERS / LIKES MODAL ====================
+ownerViewersBtn.addEventListener("click", () => {
+  showViewersModal("viewers");
+});
+
+ownerLikesBtn.addEventListener("click", () => {
+  showViewersModal("likes");
+});
+
+closeViewersModal.addEventListener("click", () => {
+  viewersModal.classList.add("hidden");
+});
+
+
+async function showViewersModal(type) {
+
+  if (!currentViewingStatus) return;
+
+  const { statuses, index } = currentViewingStatus;
+  const status = statuses[index];
+
+  const uids = type === "viewers"
+    ? (status.viewers || [])
+    : (status.likes || []);
+
+  viewersModalTitle.textContent = type === "viewers"
+    ? `Viewers (${uids.length})`
+    : `Likes (${uids.length})`;
+
+  viewersList.innerHTML =
+    `<p class="loading">Loading...</p>`;
+
+  viewersModal.classList.remove("hidden");
+
+  if (uids.length === 0) {
+    viewersList.innerHTML =
+      `<p class="loading">Abhi koi ${type === "viewers" ? "viewer" : "like"} nahi hai</p>`;
+    return;
+  }
+
+  viewersList.innerHTML = "";
+
+  for (const uid of uids) {
+    try {
+      const snap = await getDoc(doc(db, "users", uid));
+      if (snap.exists()) {
+        const data = snap.data();
+        const div = document.createElement("div");
+        div.className = "viewer-item";
+        div.innerHTML = `
+          <div class="avatar">${initials(data.name)}</div>
+          <div class="viewer-item-info">
+            <strong>${safe(data.name || "User")}</strong>
+            <small>${safe(data.email || "")}</small>
+          </div>
+        `;
+        viewersList.appendChild(div);
+      }
+    } catch (err) {
+      console.error("Load viewer error:", err);
+    }
+  }
+
+}
+
+
+// ==================== OWNER DELETE STATUS ====================
+ownerDeleteBtn.addEventListener("click", async () => {
+
+  if (!currentViewingStatus) return;
+
+  const { statuses, index } = currentViewingStatus;
+  const status = statuses[index];
+
+  if (status.userId !== currentUser.uid) {
+    showToast("❌ Ye aapka status nahi hai");
+    return;
+  }
+
+  const confirmDelete = confirm("Ye status delete karna hai?");
+  if (!confirmDelete) return;
+
+  try {
+
+    const { deleteDoc } = await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
+
+    await deleteDoc(doc(db, "status", status.id));
+    showToast("✅ Status deleted");
+    closeStatusViewer();
+
+  } catch (err) {
+    console.error("Delete status error:", err);
+    showToast("❌ Delete fail hua");
+  }
+
+});
+
+
+// ==================== CLICK OUTSIDE MODALS ====================
+addStatusModal.addEventListener("click", (e) => {
+  if (e.target === addStatusModal) closeAddStatusModal();
+});
+
+viewersModal.addEventListener("click", (e) => {
+  if (e.target === viewersModal) viewersModal.classList.add("hidden");
+});
 
 
 // ==================== START ====================
