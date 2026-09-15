@@ -145,8 +145,12 @@ const closeViewersModal = document.getElementById("closeViewersModal");
 const viewersList = document.getElementById("viewersList");
 const viewersModalTitle = document.getElementById("viewersModalTitle");
 
-const toastEl = document.getElementById("toast");
-
+const toastEl = document.getElementById("toast") || document.createElement("div");
+if (!document.getElementById("toast")) {
+  toastEl.id = "toast";
+  toastEl.className = "toast hidden";
+  document.body.appendChild(toastEl);
+}
 
 // ==================== STATE ====================
 let signupMode = false;
