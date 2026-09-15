@@ -9,7 +9,7 @@
 
 <body>
 
-  <!-- ===== AUTH SCREEN ===== -->
+  <!-- AUTH SCREEN -->
   <div id="authScreen" class="auth-screen">
     <div class="auth-box">
       <div class="logo">BOYS</div>
@@ -30,7 +30,7 @@
   </div>
 
 
-  <!-- ===== MAIN APP ===== -->
+  <!-- MAIN APP -->
   <div id="app" class="app hidden">
 
     <aside class="sidebar">
@@ -40,17 +40,15 @@
           <h2>BOYS</h2>
           <span id="myStatus">Offline</span>
         </div>
-
         <button id="logoutButton" class="logout-btn">Logout</button>
       </div>
 
-      <!-- Tabs: Chats / Status -->
       <div class="sidebar-tabs">
         <button id="chatsTabBtn" class="sidebar-tab active">💬 Chats</button>
         <button id="statusTabBtn" class="sidebar-tab">📸 Status</button>
       </div>
 
-      <!-- ===== CHATS VIEW ===== -->
+      <!-- CHATS VIEW -->
       <div id="chatsView" class="sidebar-view">
 
         <div class="my-profile">
@@ -71,10 +69,9 @@
 
       </div>
 
-      <!-- ===== STATUS VIEW ===== -->
+      <!-- STATUS VIEW -->
       <div id="statusView" class="sidebar-view hidden">
 
-        <!-- My Status -->
         <div class="status-mine" id="myStatusCard">
           <div class="status-avatar-wrap">
             <div class="avatar" id="statusMyAvatar">B</div>
@@ -86,7 +83,6 @@
           </div>
         </div>
 
-        <!-- Recent updates -->
         <div class="status-section-title">Recent updates</div>
         <div id="statusList" class="status-list">
           <p class="loading">Loading status...</p>
@@ -130,7 +126,7 @@
   </div>
 
 
-  <!-- ===== MESSAGE CONTEXT MENU ===== -->
+  <!-- MESSAGE CONTEXT MENU -->
   <div id="msgMenu" class="msg-menu hidden">
     <div class="msg-menu-content">
       <button class="msg-option" id="menuCopy">📋 Copy</button>
@@ -140,7 +136,7 @@
   </div>
 
 
-  <!-- ===== DELETE SUB-MENU ===== -->
+  <!-- DELETE SUB-MENU -->
   <div id="deleteMenu" class="msg-menu hidden">
     <div class="msg-menu-content">
       <button class="msg-option danger" id="deleteForMe">🗑️ Delete for me</button>
@@ -150,7 +146,7 @@
   </div>
 
 
-  <!-- ===== ADD STATUS MODAL ===== -->
+  <!-- ADD STATUS MODAL -->
   <div id="addStatusModal" class="modal hidden">
     <div class="modal-box">
       <div class="modal-header">
@@ -166,9 +162,7 @@
         </div>
 
         <div class="status-img-row">
-          <label for="statusImage" class="status-img-btn">
-            📷 Add Photo
-          </label>
+          <label for="statusImage" class="status-img-btn">📷 Add Photo</label>
           <input type="file" id="statusImage" accept="image/*" class="hidden">
           <small id="statusImgName"></small>
         </div>
@@ -191,7 +185,7 @@
   </div>
 
 
-  <!-- ===== STATUS VIEWER ===== -->
+  <!-- STATUS VIEWER -->
   <div id="statusViewer" class="status-viewer hidden">
     <div class="status-progress-bar" id="statusProgress"></div>
 
@@ -206,30 +200,19 @@
 
     <div class="status-content" id="statusContent"></div>
 
-    <!-- Owner controls: viewers, likes -->
     <div class="status-owner-bar hidden" id="statusOwnerBar">
-      <button class="owner-btn" id="ownerViewersBtn">
-        👁️ <span id="viewerCount">0</span>
-      </button>
-      <button class="owner-btn" id="ownerLikesBtn">
-        ❤️ <span id="likeCount">0</span>
-      </button>
-      <button class="owner-btn danger" id="ownerDeleteBtn">
-        🗑️ Delete
-      </button>
+      <button class="owner-btn" id="ownerViewersBtn">👁️ <span id="viewerCount">0</span></button>
+      <button class="owner-btn" id="ownerLikesBtn">❤️ <span id="likeCount">0</span></button>
+      <button class="owner-btn danger" id="ownerDeleteBtn">🗑️ Delete</button>
     </div>
 
-    <!-- Viewer controls: like -->
     <div class="status-viewer-bar hidden" id="statusViewerBar">
-      <button class="like-status-btn" id="likeStatusBtn">
-        ❤️ Like
-      </button>
-      <input id="statusReplyInput" placeholder="Reply..." class="hidden">
+      <button class="like-status-btn" id="likeStatusBtn">❤️ Like</button>
     </div>
   </div>
 
 
-  <!-- ===== VIEWERS LIST MODAL ===== -->
+  <!-- VIEWERS LIST MODAL -->
   <div id="viewersModal" class="modal hidden">
     <div class="modal-box">
       <div class="modal-header">
@@ -239,16 +222,6 @@
       <div class="modal-body">
         <div id="viewersList" class="viewers-list"></div>
       </div>
-    </div>
-  </div>
-
-
-  <!-- ===== BROWSER NOTIFICATION TOAST ===== -->
-  <div id="notifToast" class="notif-toast hidden">
-    <div class="notif-icon">💬</div>
-    <div class="notif-body">
-      <strong id="notifName">User</strong>
-      <small id="notifText">sent a message</small>
     </div>
   </div>
 
