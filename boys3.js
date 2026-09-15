@@ -1,57 +1,15 @@
-alert("SCRIPT CHAL RAHA HAI");
+// ==================== SUPABASE ====================
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-import {
-  initializeApp
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+// ⚠️ YAHAN APNA SUPABASE URL AUR ANON KEY DAALO
+const SUPABASE_URL = "https://uqeeelnmmnkaosxvmoxb.supabase.co/rest/v1/";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVxZWVlbG5tbW5rYW9zeHZtb3hiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0ODUxMDIsImV4cCI6MjEwNTA2MTEwMn0.I0VEgwZR7GSnBlVOMbH8vFqvRFcJ-sIxIb4KFQITNXo";
 
-import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  signOut
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-import {
-  getFirestore,
-  doc,
-  setDoc,
-  getDoc,
-  collection,
-  addDoc,
-  query,
-  orderBy,
-  onSnapshot,
-  serverTimestamp,
-  updateDoc,
-  arrayUnion,
-  arrayRemove,
-  writeBatch
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-
-import {
-  getStorage,
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
-
-
-// ==================== FIREBASE ====================
-const firebaseConfig = {
-  apiKey: "AIzaSyCUhCfOlm0fk7omOwqcg7y3xkX77_xDrFI",
-  authDomain: "boys-c950b.firebaseapp.com",
-  projectId: "boys-c950b",
-  storageBucket: "boys-c950b.firebasestorage.app",
-  messagingSenderId: "182409162273",
-  appId: "1:182409162273:web:ed5d49b560e400e889fd60",
-  measurementId: "G-LRCQV0CESH"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+if (SUPABASE_URL.includes("YOUR_SUPABASE")) {
+  alert("⚠️ Pehle boys3.js me apna Supabase URL aur Anon Key daalo!");
+}
 
 
 // ==================== ELEMENTS ====================
@@ -92,24 +50,20 @@ const sendButton = document.getElementById("sendButton");
 
 const backButton = document.getElementById("backButton");
 
-// Context menu
 const msgMenu = document.getElementById("msgMenu");
 const menuCopy = document.getElementById("menuCopy");
 const menuDelete = document.getElementById("menuDelete");
 
-// Delete sub-menu
 const deleteMenu = document.getElementById("deleteMenu");
 const deleteForMe = document.getElementById("deleteForMe");
 const deleteForEveryone = document.getElementById("deleteForEveryone");
 const deleteCancel = document.getElementById("deleteCancel");
 
-// Sidebar tabs
 const chatsTabBtn = document.getElementById("chatsTabBtn");
 const statusTabBtn = document.getElementById("statusTabBtn");
 const chatsView = document.getElementById("chatsView");
 const statusView = document.getElementById("statusView");
 
-// Status
 const myStatusCard = document.getElementById("myStatusCard");
 const statusMyAvatar = document.getElementById("statusMyAvatar");
 const myStatusSub = document.getElementById("myStatusSub");
@@ -152,6 +106,7 @@ if (!document.getElementById("toast")) {
   document.body.appendChild(toastEl);
 }
 
+
 // ==================== STATE ====================
 let signupMode = false;
 let currentUser = null;
@@ -159,10 +114,13 @@ let currentUserData = null;
 let selectedUser = null;
 let allUsers = [];
 let allStatuses = [];
+
 let stopUsers = null;
 let stopMessages = null;
 let stopSelectedUser = null;
 let stopStatuses = null;
+
+let currentChatId = null;
 
 let heartbeatInterval = null;
 let idleTimer = null;
@@ -198,6 +156,31 @@ signupTab.addEventListener("click", () => {
 });
 
 
+// ==================== AUTH ERROR MAPPER ====================
+function authErrorMessage(error) {
+  const msg = (error?.message || "").toLowerCase();
+  if (msg.includes("already registered") || msg.includes("already been registered")) {
+    return "This email is already registered.";
+  }
+  if (msg.includes("invalid login") || msg.includes("invalid credentials")) {
+    return "Email or password is incorrect.";
+  }
+  if (msg.includes("email not confirmed")) {
+    return "Please confirm your email first.";
+  }
+  if (msg.includes("invalid email")) {
+    return "Invalid email address.";
+  }
+  if (msg.includes("password should be at least")) {
+    return "Password must be at least 6 characters.";
+  }
+  if (msg.includes("rate limit")) {
+    return "Too many attempts. Please try again later.";
+  }
+  return error?.message || "Something went wrong.";
+}
+
+
 // ==================== LOGIN / SIGNUP ====================
 authButton.addEventListener("click", async () => {
 
@@ -211,12 +194,10 @@ authButton.addEventListener("click", async () => {
     authMessage.textContent = "Please enter your name.";
     return;
   }
-
   if (!email) {
     authMessage.textContent = "Please enter your email.";
     return;
   }
-
   if (password.length < 6) {
     authMessage.textContent = "Password must be at least 6 characters.";
     return;
@@ -225,76 +206,53 @@ authButton.addEventListener("click", async () => {
   authButton.disabled = true;
 
   try {
-
     if (signupMode) {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name: name } }
+      });
 
-      const result = await createUserWithEmailAndPassword(auth, email, password);
+      if (error) throw error;
 
-      await setDoc(
-        doc(db, "users", result.user.uid),
-        {
-          uid: result.user.uid,
-          name: name,
-          email: email,
-          online: true,
-          lastSeen: serverTimestamp(),
-          createdAt: serverTimestamp()
-        }
-      );
-
-      authMessage.textContent = "Account created successfully.";
+      if (!data.session) {
+        authMessage.style.color = "#16a34a";
+        authMessage.textContent = "Account created. Check your email to confirm.";
+      } else {
+        authMessage.style.color = "#16a34a";
+        authMessage.textContent = "Account created successfully.";
+      }
 
     } else {
-
-      await signInWithEmailAndPassword(auth, email, password);
-
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
     }
 
   } catch (error) {
-
     console.error(error);
-
-    if (error.code === "auth/email-already-in-use") {
-      authMessage.textContent = "This email is already registered.";
-    }
-    else if (
-      error.code === "auth/invalid-credential" ||
-      error.code === "auth/wrong-password" ||
-      error.code === "auth/user-not-found"
-    ) {
-      authMessage.textContent = "Email or password is incorrect.";
-    }
-    else if (error.code === "auth/invalid-email") {
-      authMessage.textContent = "Invalid email address.";
-    }
-    else if (error.code === "auth/weak-password") {
-      authMessage.textContent = "Password must be at least 6 characters.";
-    }
-    else if (error.code === "auth/operation-not-allowed") {
-      authMessage.textContent = "Firebase Email/Password is not enabled.";
-    }
-    else {
-      authMessage.textContent = error.message;
-    }
-
+    authMessage.style.color = "#e11d48";
+    authMessage.textContent = authErrorMessage(error);
   }
 
   authButton.disabled = false;
-
 });
 
 
 // ==================== AUTH STATE ====================
-onAuthStateChanged(auth, async (user) => {
+supabase.auth.onAuthStateChange(async (event, session) => {
+  console.log("Auth event:", event);
 
-  if (!user) {
-    currentUser = null;
-    authScreen.classList.remove("hidden");
-    appScreen.classList.add("hidden");
-    stopPresence();
-    return;
+  if (session?.user) {
+    if (!currentUser || currentUser.id !== session.user.id) {
+      await handleSignedIn(session.user);
+    }
+  } else {
+    if (currentUser) handleSignedOut();
   }
+});
 
+
+async function handleSignedIn(user) {
   currentUser = user;
 
   authScreen.classList.add("hidden");
@@ -305,224 +263,212 @@ onAuthStateChanged(auth, async (user) => {
   startPresence();
   loadUsers();
   loadStatuses();
+}
 
-});
+
+function handleSignedOut() {
+  currentUser = null;
+  currentUserData = null;
+  selectedUser = null;
+
+  authScreen.classList.remove("hidden");
+  appScreen.classList.add("hidden");
+
+  stopPresence();
+
+  if (stopUsers) { stopUsers(); stopUsers = null; }
+  if (stopMessages) { stopMessages(); stopMessages = null; }
+  if (stopSelectedUser) { stopSelectedUser(); stopSelectedUser = null; }
+  if (stopStatuses) { stopStatuses(); stopStatuses = null; }
+}
 
 
 // ==================== LOAD PROFILE ====================
 async function loadProfile() {
+  let { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("uid", currentUser.id)
+    .maybeSingle();
 
-  const ref = doc(db, "users", currentUser.uid);
-  const snap = await getDoc(ref);
+  // Agar row nahi mila (trigger fail hua) to create kar do
+  if (!data) {
+    const name = currentUser.user_metadata?.name
+      || (currentUser.email || "").split("@")[0]
+      || "User";
 
-  if (snap.exists()) {
+    await supabase.from("users").insert({
+      uid: currentUser.id,
+      name: name,
+      email: currentUser.email,
+      online: true,
+      last_seen: new Date().toISOString()
+    });
 
-    currentUserData = snap.data();
+    const retry = await supabase
+      .from("users")
+      .select("*")
+      .eq("uid", currentUser.id)
+      .maybeSingle();
 
-    myName.textContent = currentUserData.name || "User";
-    myEmail.textContent = currentUserData.email || currentUser.email;
-    myAvatar.textContent = initials(currentUserData.name);
-    statusMyAvatar.textContent = initials(currentUserData.name);
-
+    data = retry.data;
   }
 
+  if (data) {
+    currentUserData = data;
+    myName.textContent = data.name || "User";
+    myEmail.textContent = data.email || currentUser.email;
+    myAvatar.textContent = initials(data.name);
+    statusMyAvatar.textContent = initials(data.name);
+  }
 }
 
 
 // ==================== PRESENCE ====================
 async function setUserOnline(status) {
-
   if (!currentUser) return;
-
   isOnline = status;
 
   try {
-
-    await setDoc(
-      doc(db, "users", currentUser.uid),
-      {
+    await supabase
+      .from("users")
+      .update({
         online: status,
-        lastSeen: serverTimestamp()
-      },
-      { merge: true }
-    );
+        last_seen: new Date().toISOString()
+      })
+      .eq("uid", currentUser.id);
 
     if (myStatus) {
       myStatus.textContent = status ? "Online" : "Offline";
     }
-
   } catch (err) {
     console.error("Presence error:", err);
   }
-
 }
 
 
 function startPresence() {
-
   stopPresence();
 
   heartbeatInterval = setInterval(() => {
-
     if (isOnline && currentUser) {
-
-      setDoc(
-        doc(db, "users", currentUser.uid),
-        {
+      supabase
+        .from("users")
+        .update({
           online: true,
-          lastSeen: serverTimestamp()
-        },
-        { merge: true }
-      ).catch(console.error);
-
+          last_seen: new Date().toISOString()
+        })
+        .eq("uid", currentUser.id)
+        .then(() => {}, console.error);
     }
-
   }, 30000);
 
-
   const resetIdleTimer = () => {
-
     if (idleTimer) clearTimeout(idleTimer);
 
-    if (!isOnline && currentUser) {
-      setUserOnline(true);
-    }
+    if (!isOnline && currentUser) setUserOnline(true);
 
     idleTimer = setTimeout(() => {
-      if (currentUser) {
-        setUserOnline(false);
-      }
+      if (currentUser) setUserOnline(false);
     }, 5 * 60 * 1000);
-
   };
 
-
   if (!activityListenersAttached) {
-
-    ["mousemove", "keydown", "click", "touchstart", "scroll"]
-      .forEach((event) => {
-        document.addEventListener(event, resetIdleTimer);
-      });
+    ["mousemove", "keydown", "click", "touchstart", "scroll"].forEach((event) => {
+      document.addEventListener(event, resetIdleTimer);
+    });
 
     window.addEventListener("beforeunload", handleUnload);
     window.addEventListener("pagehide", handleUnload);
 
     document.addEventListener("visibilitychange", () => {
-
       if (!currentUser) return;
-
-      if (document.hidden) {
-        setUserOnline(false);
-      } else {
-        setUserOnline(true);
-      }
-
+      if (document.hidden) setUserOnline(false);
+      else setUserOnline(true);
     });
 
     activityListenersAttached = true;
-
   }
 
   resetIdleTimer();
-
 }
 
 
 function stopPresence() {
-
   if (heartbeatInterval) {
     clearInterval(heartbeatInterval);
     heartbeatInterval = null;
   }
-
   if (idleTimer) {
     clearTimeout(idleTimer);
     idleTimer = null;
   }
-
 }
 
 
 function handleUnload() {
-
   if (!currentUser) return;
-
-  setDoc(
-    doc(db, "users", currentUser.uid),
-    {
-      online: false,
-      lastSeen: serverTimestamp()
-    },
-    { merge: true }
-  );
-
+  // Best-effort (async, browser band hone se pehle complete ho ya na ho)
+  supabase
+    .from("users")
+    .update({ online: false, last_seen: new Date().toISOString() })
+    .eq("uid", currentUser.id)
+    .then(() => {}, () => {});
 }
 
 
 // ==================== LOAD USERS ====================
-function loadUsers() {
+async function loadUsers() {
+  if (stopUsers) { stopUsers(); stopUsers = null; }
 
-  if (stopUsers) stopUsers();
+  await refreshUsers();
 
-  const q = collection(db, "users");
+  const channel = supabase
+    .channel("users-rt-" + Date.now())
+    .on("postgres_changes",
+      { event: "*", schema: "public", table: "users" },
+      () => refreshUsers()
+    )
+    .subscribe();
 
-  stopUsers = onSnapshot(q, (snapshot) => {
+  stopUsers = () => supabase.removeChannel(channel);
+}
 
-    allUsers = [];
 
-    snapshot.forEach((item) => {
+async function refreshUsers() {
+  if (!currentUser) return;
 
-      const user = item.data();
+  const { data, error } = await supabase.from("users").select("*");
 
-      if (user.uid !== currentUser.uid) {
-        allUsers.push(user);
-      }
-
-    });
-
-    allUsers.sort((a, b) =>
-      (a.name || "").localeCompare(b.name || "")
-    );
-
-    showUsers(allUsers);
-
-  }, (error) => {
-
+  if (error) {
     console.error(error);
+    usersList.innerHTML = `<p class="loading">Users load nahi ho rahe.</p>`;
+    return;
+  }
 
-    usersList.innerHTML =
-      `<p class="loading">Users load nahi ho rahe.</p>`;
+  allUsers = (data || []).filter((u) => u.uid !== currentUser.id);
+  allUsers.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
-  });
-
+  showUsers(allUsers);
 }
 
 
 // ==================== SHOW USERS ====================
 function showUsers(users) {
-
   usersList.innerHTML = "";
 
   if (users.length === 0) {
-    usersList.innerHTML =
-      `<p class="loading">Abhi koi other user nahi mila.</p>`;
+    usersList.innerHTML = `<p class="loading">Abhi koi other user nahi mila.</p>`;
     return;
   }
 
   users.forEach((user) => {
-
     let statusText = "";
 
     if (user.online) {
       statusText = "Online";
-    } else if (user.lastSeen) {
-
-      const date = user.lastSeen.toDate
-        ? user.lastSeen.toDate()
-        : new Date(user.lastSeen);
-
-      statusText = "Last seen " + timeAgo(date);
-
+    } else if (user.last_seen) {
+      statusText = "Last seen " + timeAgo(new Date(user.last_seen));
     } else {
       statusText = "Offline";
     }
@@ -531,49 +477,36 @@ function showUsers(users) {
     div.className = "user-item";
 
     div.innerHTML = `
-      <div class="avatar">
-        ${initials(user.name)}
-      </div>
-
+      <div class="avatar">${initials(user.name)}</div>
       <div class="user-info">
         <strong>${safe(user.name || "User")}</strong>
         <span>${statusText}</span>
       </div>
-
       ${user.online ? `<div class="online-dot"></div>` : ""}
     `;
 
     div.addEventListener("click", () => openChat(user));
-
     usersList.appendChild(div);
-
   });
-
 }
 
 
 // ==================== SEARCH ====================
 searchInput.addEventListener("input", () => {
-
   const text = searchInput.value.toLowerCase().trim();
-
   const result = allUsers.filter((user) =>
     (user.name || "").toLowerCase().includes(text)
   );
-
   showUsers(result);
-
 });
 
 
 // ==================== OPEN CHAT ====================
 function openChat(user) {
-
   selectedUser = user;
 
   emptyChat.classList.add("hidden");
   chatBox.classList.remove("hidden");
-
   appScreen.classList.add("chat-open");
 
   chatName.textContent = user.name || "User";
@@ -582,56 +515,44 @@ function openChat(user) {
   updateChatStatus(user);
 
   listenToSelectedUser(user.uid);
-
   loadMessages();
-
 }
 
 
 function listenToSelectedUser(uid) {
+  if (stopSelectedUser) { stopSelectedUser(); stopSelectedUser = null; }
 
-  if (stopSelectedUser) {
-    stopSelectedUser();
-    stopSelectedUser = null;
-  }
+  const channel = supabase
+    .channel("user-" + uid + "-" + Date.now())
+    .on("postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "users",
+        filter: `uid=eq.${uid}`
+      },
+      (payload) => {
+        selectedUser = { ...selectedUser, ...payload.new };
+        updateChatStatus(payload.new);
+      }
+    )
+    .subscribe();
 
-  stopSelectedUser = onSnapshot(
-    doc(db, "users", uid),
-    (snap) => {
-
-      if (!snap.exists()) return;
-
-      const data = snap.data();
-
-      selectedUser = { ...selectedUser, ...data };
-
-      updateChatStatus(data);
-
-    }
-  );
-
+  stopSelectedUser = () => supabase.removeChannel(channel);
 }
 
 
 function updateChatStatus(user) {
-
   if (user.online) {
     chatStatus.textContent = "Online";
     chatStatus.style.color = "#22a447";
-  } else if (user.lastSeen) {
-
-    const date = user.lastSeen.toDate
-      ? user.lastSeen.toDate()
-      : new Date(user.lastSeen);
-
-    chatStatus.textContent = "Last seen " + timeAgo(date);
+  } else if (user.last_seen) {
+    chatStatus.textContent = "Last seen " + timeAgo(new Date(user.last_seen));
     chatStatus.style.color = "#888";
-
   } else {
     chatStatus.textContent = "Offline";
     chatStatus.style.color = "#888";
   }
-
 }
 
 
@@ -643,142 +564,123 @@ function chatId(a, b) {
 
 // ==================== LOAD MESSAGES ====================
 function loadMessages() {
+  if (stopMessages) { stopMessages(); stopMessages = null; }
 
-  if (stopMessages) {
-    stopMessages();
-    stopMessages = null;
-  }
-
+  currentChatId = chatId(currentUser.id, selectedUser.uid);
   messagesBox.innerHTML = "";
 
-  const id = chatId(currentUser.uid, selectedUser.uid);
+  refreshMessages();
 
-  const q = query(
-    collection(db, "chats", id, "messages"),
-    orderBy("createdAt")
-  );
+  const channel = supabase
+    .channel("msgs-" + currentChatId + "-" + Date.now())
+    .on("postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "messages",
+        filter: `chat_id=eq.${currentChatId}`
+      },
+      () => refreshMessages()
+    )
+    .subscribe();
 
-  stopMessages = onSnapshot(q, (snapshot) => {
+  stopMessages = () => supabase.removeChannel(channel);
+}
 
-    messagesBox.innerHTML = "";
 
-    const messages = [];
+async function refreshMessages() {
+  if (!currentUser || !selectedUser || !currentChatId) return;
 
-    snapshot.forEach((item) => {
-      messages.push({
-        id: item.id,
-        data: item.data()
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("chat_id", currentChatId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Load messages error:", error);
+    return;
+  }
+
+  renderMessages(data || []);
+}
+
+
+function renderMessages(messages) {
+  messagesBox.innerHTML = "";
+
+  messages.forEach((message) => {
+    const deletedFor = message.deleted_for || [];
+    if (deletedFor.includes(currentUser.id)) return;
+
+    const msgId = message.id;
+    const sent = message.sender_id === currentUser.id;
+
+    const div = document.createElement("div");
+    div.className = sent ? "message sent" : "message received";
+    div.dataset.msgId = msgId;
+    div.dataset.sent = sent ? "1" : "0";
+    div.dataset.read = message.read ? "1" : "0";
+
+    let time = "";
+    if (message.created_at) {
+      time = new Date(message.created_at).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit"
       });
-    });
+    }
 
-    messages.forEach(({ id: msgId, data: message }) => {
+    let tickHTML = "";
+    if (sent && !message.deleted_for_everyone) {
+      tickHTML = message.read
+        ? `<span class="tick double read">✓✓</span>`
+        : `<span class="tick double">✓✓</span>`;
+    }
 
-      const deletedFor = message.deletedFor || [];
-      if (deletedFor.includes(currentUser.uid)) {
-        return;
-      }
+    if (message.deleted_for_everyone) {
+      div.classList.add("deleted");
+      div.innerHTML = `
+        <em>🚫 Ye message delete kar diya gaya</em>
+        <span class="message-time">${time}</span>
+      `;
+    } else {
+      div.innerHTML = `
+        <span class="msg-text">${safe(message.text || "")}</span>
+        <span class="message-time">${time}${tickHTML}</span>
+      `;
+    }
 
-      const div = document.createElement("div");
-      const sent = message.senderId === currentUser.uid;
-
-      div.className = sent ? "message sent" : "message received";
-      div.dataset.msgId = msgId;
-      div.dataset.sent = sent ? "1" : "0";
-      div.dataset.read = message.read ? "1" : "0";
-
-      let time = "";
-
-      if (message.createdAt) {
-        time = message.createdAt.toDate().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit"
-        });
-      }
-
-      let tickHTML = "";
-
-      if (sent && !message.deletedForEveryone) {
-        if (message.read) {
-          tickHTML = `<span class="tick double read">✓✓</span>`;
-        } else {
-          tickHTML = `<span class="tick double">✓✓</span>`;
-        }
-      }
-
-      if (message.deletedForEveryone) {
-        div.classList.add("deleted");
-        div.innerHTML = `
-          <em>🚫 Ye message delete kar diya gaya</em>
-          <span class="message-time">${time}</span>
-        `;
-      } else {
-        div.innerHTML = `
-          <span class="msg-text">${safe(message.text || "")}</span>
-          <span class="message-time">
-            ${time}
-            ${tickHTML}
-          </span>
-        `;
-      }
-
-      attachMessageHandlers(div, msgId, message, sent);
-
-      messagesBox.appendChild(div);
-
-    });
-
-    messagesBox.scrollTop = messagesBox.scrollHeight;
-
-    markMessagesAsRead();
-
+    attachMessageHandlers(div, msgId, message, sent);
+    messagesBox.appendChild(div);
   });
 
+  messagesBox.scrollTop = messagesBox.scrollHeight;
+  markMessagesAsRead();
 }
 
 
 // ==================== MARK AS READ ====================
 async function markMessagesAsRead() {
+  if (!currentUser || !selectedUser || !currentChatId) return;
 
-  if (!currentUser || !selectedUser) return;
-
-  const id = chatId(currentUser.uid, selectedUser.uid);
-
-  const messageEls = messagesBox.querySelectorAll(".message.received");
-
-  if (messageEls.length === 0) return;
-
-  const batch = writeBatch(db);
-  let hasUpdates = false;
-
-  messageEls.forEach((el) => {
-
-    if (el.dataset.read === "1") return;
-
-    const msgId = el.dataset.msgId;
-
-    batch.update(
-      doc(db, "chats", id, "messages", msgId),
-      { read: true, readAt: serverTimestamp() }
-    );
-
-    hasUpdates = true;
-
-  });
-
-  if (hasUpdates) {
-    try {
-      await batch.commit();
-    } catch (err) {
-      console.error("Read update error:", err);
-    }
+  try {
+    await supabase
+      .from("messages")
+      .update({
+        read: true,
+        read_at: new Date().toISOString()
+      })
+      .eq("chat_id", currentChatId)
+      .eq("receiver_id", currentUser.id)
+      .eq("read", false);
+  } catch (err) {
+    console.error("Read update error:", err);
   }
-
 }
 
 
 // ==================== MESSAGE HANDLERS ====================
 function attachMessageHandlers(div, msgId, message, sent) {
-
   let pressTimer = null;
   let startX = 0;
   let startY = 0;
@@ -825,14 +727,12 @@ function attachMessageHandlers(div, msgId, message, sent) {
     e.preventDefault();
     openContextMenu(div, msgId, message, sent, e.clientX, e.clientY);
   });
-
 }
 
 
 // ==================== OPEN CONTEXT MENU ====================
 function openContextMenu(div, msgId, message, sent, x, y) {
-
-  if (message.deletedForEveryone) return;
+  if (message.deleted_for_everyone) return;
 
   pendingMsg = {
     id: msgId,
@@ -852,29 +752,24 @@ function openContextMenu(div, msgId, message, sent, x, y) {
   const content = msgMenu.querySelector(".msg-menu-content");
 
   if (window.innerWidth > 700) {
-
     content.style.position = "fixed";
     content.style.left = "0px";
     content.style.top = "0px";
 
     const rect = content.getBoundingClientRect();
-
     let left = x;
     let top = y;
 
     if (left + rect.width > window.innerWidth - 10) {
       left = window.innerWidth - rect.width - 10;
     }
-
     if (top + rect.height > window.innerHeight - 10) {
       top = window.innerHeight - rect.height - 10;
     }
 
     content.style.left = left + "px";
     content.style.top = top + "px";
-
   }
-
 }
 
 
@@ -892,7 +787,6 @@ msgMenu.addEventListener("click", (e) => {
 
 // ==================== MENU: COPY ====================
 menuCopy.addEventListener("click", async () => {
-
   if (!pendingMsg) return;
 
   const text = pendingMsg.data.text || "";
@@ -915,7 +809,6 @@ menuCopy.addEventListener("click", async () => {
   }
 
   closeContextMenu();
-
 });
 
 
@@ -929,30 +822,35 @@ menuDelete.addEventListener("click", () => {
 
 // ==================== DELETE FOR ME ====================
 deleteForMe.addEventListener("click", async () => {
-
   if (!pendingMsg) return;
 
   const { id } = pendingMsg;
-  const id_chat = chatId(currentUser.uid, selectedUser.uid);
 
   try {
-    await updateDoc(
-      doc(db, "chats", id_chat, "messages", id),
-      { deletedFor: arrayUnion(currentUser.uid) }
-    );
+    const { data } = await supabase
+      .from("messages")
+      .select("deleted_for")
+      .eq("id", id)
+      .single();
+
+    const arr = data?.deleted_for || [];
+    if (!arr.includes(currentUser.id)) {
+      await supabase
+        .from("messages")
+        .update({ deleted_for: [...arr, currentUser.id] })
+        .eq("id", id);
+    }
   } catch (err) {
     console.error("Delete for me error:", err);
     showToast("❌ Delete fail hua");
   }
 
   closeDeleteMenu();
-
 });
 
 
 // ==================== DELETE FOR EVERYONE ====================
 deleteForEveryone.addEventListener("click", async () => {
-
   if (!pendingMsg) return;
 
   const { id, sent } = pendingMsg;
@@ -963,24 +861,21 @@ deleteForEveryone.addEventListener("click", async () => {
     return;
   }
 
-  const id_chat = chatId(currentUser.uid, selectedUser.uid);
-
   try {
-    await updateDoc(
-      doc(db, "chats", id_chat, "messages", id),
-      {
-        deletedForEveryone: true,
+    await supabase
+      .from("messages")
+      .update({
+        deleted_for_everyone: true,
         text: "",
-        deletedAt: serverTimestamp()
-      }
-    );
+        deleted_at: new Date().toISOString()
+      })
+      .eq("id", id);
   } catch (err) {
     console.error("Delete for everyone error:", err);
     showToast("❌ Delete fail hua");
   }
 
   closeDeleteMenu();
-
 });
 
 
@@ -1012,83 +907,72 @@ messageInput.addEventListener("keydown", (e) => {
 
 
 async function sendMessage() {
-
   if (!currentUser || !selectedUser) return;
 
   const text = messageInput.value.trim();
-
   if (!text) return;
 
-  const id = chatId(currentUser.uid, selectedUser.uid);
+  const id = chatId(currentUser.id, selectedUser.uid);
 
   try {
-    await addDoc(
-      collection(db, "chats", id, "messages"),
-      {
-        senderId: currentUser.uid,
-        receiverId: selectedUser.uid,
-        text: text,
-        createdAt: serverTimestamp(),
-        read: false,
-        deletedFor: [],
-        deletedForEveryone: false
-      }
-    );
+    const { error } = await supabase.from("messages").insert({
+      chat_id: id,
+      sender_id: currentUser.id,
+      receiver_id: selectedUser.uid,
+      text: text,
+      read: false,
+      deleted_for: [],
+      deleted_for_everyone: false
+    });
+
+    if (error) throw error;
 
     messageInput.value = "";
-    messagesBox.scrollTop = messagesBox.scrollHeight;
+
+    // Realtime delay avoid karne ke liye ek refresh
+    setTimeout(refreshMessages, 150);
 
   } catch (err) {
     console.error("Send error:", err);
     showToast("❌ Message send nahi hua");
   }
-
 }
 
 
 // ==================== LOGOUT ====================
 logoutButton.addEventListener("click", async () => {
-
   if (currentUser) {
-    await setDoc(
-      doc(db, "users", currentUser.uid),
-      {
-        online: false,
-        lastSeen: serverTimestamp()
-      },
-      { merge: true }
-    );
+    try {
+      await supabase
+        .from("users")
+        .update({
+          online: false,
+          last_seen: new Date().toISOString()
+        })
+        .eq("uid", currentUser.id);
+    } catch (e) {}
   }
 
   stopPresence();
-  await signOut(auth);
-
+  await supabase.auth.signOut();
 });
 
 
 // ==================== BACK ====================
 backButton.addEventListener("click", () => {
-
   selectedUser = null;
+  currentChatId = null;
 
   appScreen.classList.remove("chat-open");
 
   chatBox.classList.add("hidden");
   emptyChat.classList.remove("hidden");
 
-  if (stopMessages) {
-    stopMessages();
-    stopMessages = null;
-  }
-
-  if (stopSelectedUser) {
-    stopSelectedUser();
-    stopSelectedUser = null;
-  }
+  if (stopMessages) { stopMessages(); stopMessages = null; }
+  if (stopSelectedUser) { stopSelectedUser(); stopSelectedUser = null; }
 
   closeContextMenu();
   closeDeleteMenu();
-
 });
 
 
@@ -1110,7 +994,6 @@ statusTabBtn.addEventListener("click", () => {
 
 // ==================== TOAST ====================
 function showToast(msg) {
-
   toastEl.textContent = msg;
   toastEl.classList.remove("hidden");
 
@@ -1120,42 +1003,25 @@ function showToast(msg) {
     toastEl.classList.remove("show");
     setTimeout(() => toastEl.classList.add("hidden"), 300);
   }, 2000);
-
 }
 
 
 // ==================== HELPERS ====================
 function initials(name) {
-
   if (!name) return "U";
-
   const parts = name.trim().split(/\s+/);
-
-  if (parts.length === 1) {
-    return parts[0].substring(0, 2).toUpperCase();
-  }
-
-  return (
-    parts[0][0] +
-    parts[parts.length - 1][0]
-  ).toUpperCase();
-
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-
 function safe(text) {
-
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
-
 }
 
-
 function timeAgo(date) {
-
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-
   if (seconds < 10) return "just now";
   if (seconds < 60) return seconds + " sec ago";
 
@@ -1169,24 +1035,15 @@ function timeAgo(date) {
   if (days < 7) return days + " day" + (days > 1 ? "s" : "") + " ago";
 
   return date.toLocaleDateString();
-
 }
 
 
 // ==================== STATUS SYSTEM ====================
-
-// Post status button click
 postStatusBtn.addEventListener("click", postStatus);
 
-// My status card click → open add modal
-myStatusCard.addEventListener("click", () => {
-  openAddStatusModal();
-});
-
-// Close add modal
+myStatusCard.addEventListener("click", () => openAddStatusModal());
 closeAddStatus.addEventListener("click", closeAddStatusModal);
 
-// Background color select
 document.querySelectorAll(".bg-color-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".bg-color-btn").forEach((b) => b.classList.remove("active"));
@@ -1195,9 +1052,7 @@ document.querySelectorAll(".bg-color-btn").forEach((btn) => {
   });
 });
 
-// Image select
 statusImage.addEventListener("change", (e) => {
-
   const file = e.target.files[0];
 
   if (!file) {
@@ -1222,13 +1077,10 @@ statusImage.addEventListener("change", (e) => {
     statusPreview.classList.remove("hidden");
   };
   reader.readAsDataURL(file);
-
 });
 
 
-// Open add status modal
 function openAddStatusModal() {
-
   statusText.value = "";
   statusImage.value = "";
   statusImgName.textContent = "";
@@ -1241,20 +1093,15 @@ function openAddStatusModal() {
   if (firstBtn) firstBtn.classList.add("active");
 
   addStatusModal.classList.remove("hidden");
-
 }
 
-
-// Close add status modal
 function closeAddStatusModal() {
   addStatusModal.classList.add("hidden");
   pendingStatusImage = null;
 }
 
 
-// Post status
 async function postStatus() {
-
   if (!currentUser) return;
 
   const text = statusText.value.trim();
@@ -1268,191 +1115,169 @@ async function postStatus() {
   postStatusBtn.textContent = "Posting...";
 
   try {
-
     let imageUrl = "";
     let type = "text";
 
-    // Upload image if any
     if (pendingStatusImage) {
+      const path = `${currentUser.id}/${Date.now()}_${pendingStatusImage.name}`;
 
-      const path = `status/${currentUser.uid}/${Date.now()}_${pendingStatusImage.name}`;
-      const fileRef = storageRef(storage, path);
+      const { error: upErr } = await supabase
+        .storage
+        .from("status")
+        .upload(path, pendingStatusImage, { upsert: false });
 
-      await uploadBytes(fileRef, pendingStatusImage);
-      imageUrl = await getDownloadURL(fileRef);
+      if (upErr) throw upErr;
+
+      const { data: urlData } = supabase
+        .storage
+        .from("status")
+        .getPublicUrl(path);
+
+      imageUrl = urlData.publicUrl;
       type = "image";
-
     }
 
     const now = Date.now();
 
-    await addDoc(
-      collection(db, "status"),
-      {
-        userId: currentUser.uid,
-        userName: currentUserData?.name || "User",
-        userEmail: currentUserData?.email || "",
-        text: text,
-        imageUrl: imageUrl,
-        type: type,
-        bgColor: selectedBgColor,
-        createdAt: serverTimestamp(),
-        expiresAt: now + (24 * 60 * 60 * 1000),
-        viewers: [],
-        likes: []
-      }
-    );
+    const { error } = await supabase.from("status").insert({
+      user_id: currentUser.id,
+      user_name: currentUserData?.name || "User",
+      user_email: currentUserData?.email || "",
+      text: text,
+      image_url: imageUrl,
+      type: type,
+      bg_color: selectedBgColor,
+      expires_at: now + (24 * 60 * 60 * 1000),
+      viewers: [],
+      likes: []
+    });
+
+    if (error) throw error;
 
     showToast("✅ Status posted!");
-
     closeAddStatusModal();
 
   } catch (err) {
     console.error("Post status error:", err);
-    showToast("❌ Status post nahi hua");
+    showToast("❌ Status post nahi hua: " + (err.message || ""));
   }
 
   postStatusBtn.disabled = false;
   postStatusBtn.textContent = "Post Status";
-
 }
 
 
 // ==================== LOAD STATUSES ====================
-function loadStatuses() {
+async function loadStatuses() {
+  if (stopStatuses) { stopStatuses(); stopStatuses = null; }
 
-  if (stopStatuses) stopStatuses();
+  await refreshStatuses();
 
-  const q = query(
-    collection(db, "status"),
-    orderBy("createdAt", "desc")
-  );
+  const channel = supabase
+    .channel("status-rt-" + Date.now())
+    .on("postgres_changes",
+      { event: "*", schema: "public", table: "status" },
+      () => refreshStatuses()
+    )
+    .subscribe();
 
-  stopStatuses = onSnapshot(q, (snapshot) => {
+  stopStatuses = () => supabase.removeChannel(channel);
+}
 
-    const now = Date.now();
-    allStatuses = [];
 
-    snapshot.forEach((item) => {
+async function refreshStatuses() {
+  if (!currentUser) return;
 
-      const data = item.data();
+  const now = Date.now();
 
-      // Skip expired
-      if (data.expiresAt && data.expiresAt < now) return;
-      // Skip if createdAt is null (not yet set)
-      if (!data.createdAt) return;
+  const { data, error } = await supabase
+    .from("status")
+    .select("*")
+    .gt("expires_at", now)
+    .order("created_at", { ascending: false });
 
-      allStatuses.push({
-        id: item.id,
-        ...data
-      });
-
-    });
-
-    showStatuses();
-
-  }, (error) => {
+  if (error) {
     console.error("Status load error:", error);
-    statusList.innerHTML =
-      `<p class="loading">Status load nahi ho raha.</p>`;
-  });
+    statusList.innerHTML = `<p class="loading">Status load nahi ho raha.</p>`;
+    return;
+  }
 
+  allStatuses = data || [];
+  showStatuses();
 }
 
 
 // ==================== SHOW STATUSES ====================
 function showStatuses() {
-
   statusList.innerHTML = "";
 
-  const now = Date.now();
-
-  // Group by userId (latest status per user)
   const grouped = {};
 
   allStatuses.forEach((s) => {
-
-    if (!grouped[s.userId]) {
-      grouped[s.userId] = [];
-    }
-
-    grouped[s.userId].push(s);
-
+    if (!grouped[s.user_id]) grouped[s.user_id] = [];
+    grouped[s.user_id].push(s);
   });
 
-  // Filter my status
   const otherUsersStatus = Object.keys(grouped).filter(
-    (uid) => uid !== currentUser.uid
+    (uid) => uid !== currentUser.id
   );
 
-  // Check my own status
-  const myStatuses = grouped[currentUser.uid] || [];
+  const myStatuses = grouped[currentUser.id] || [];
 
   if (myStatuses.length > 0) {
-    myStatusSub.textContent = `${myStatuses.length} update${myStatuses.length > 1 ? "s" : ""} · Tap to view`;
+    myStatusSub.textContent =
+      `${myStatuses.length} update${myStatuses.length > 1 ? "s" : ""} · Tap to view`;
   } else {
     myStatusSub.textContent = "Tap to add status update";
   }
 
   if (otherUsersStatus.length === 0) {
-    statusList.innerHTML =
-      `<p class="loading">Abhi koi status nahi hai</p>`;
+    statusList.innerHTML = `<p class="loading">Abhi koi status nahi hai</p>`;
     return;
   }
 
-  // Sort by latest
   otherUsersStatus.sort((a, b) => {
-    const aLatest = grouped[a][0].createdAt?.toDate?.()?.getTime() || 0;
-    const bLatest = grouped[b][0].createdAt?.toDate?.()?.getTime() || 0;
+    const aLatest = new Date(grouped[a][0].created_at).getTime() || 0;
+    const bLatest = new Date(grouped[b][0].created_at).getTime() || 0;
     return bLatest - aLatest;
   });
 
   otherUsersStatus.forEach((uid) => {
-
     const userStatuses = grouped[uid];
     const latest = userStatuses[0];
 
-    // Check if I have seen this status
     const hasViewed = userStatuses.every((s) =>
-      (s.viewers || []).includes(currentUser.uid)
+      (s.viewers || []).includes(currentUser.id)
     );
 
     const div = document.createElement("div");
     div.className = "status-item";
 
-    let timeText = "";
-    if (latest.createdAt) {
-      const date = latest.createdAt.toDate();
-      timeText = timeAgo(date);
-    }
+    const timeText = latest.created_at
+      ? timeAgo(new Date(latest.created_at))
+      : "";
 
     div.innerHTML = `
       <div class="status-ring ${hasViewed ? "viewed" : ""}">
         <div class="status-ring-inner">
-          ${initials(latest.userName)}
+          ${initials(latest.user_name)}
         </div>
       </div>
       <div class="status-info">
-        <strong>${safe(latest.userName || "User")}</strong>
+        <strong>${safe(latest.user_name || "User")}</strong>
         <small>${timeText}</small>
       </div>
       ${userStatuses.length > 1 ? `<div class="status-badge">${userStatuses.length}</div>` : ""}
     `;
 
-    div.addEventListener("click", () => {
-      openStatusViewer(userStatuses, 0);
-    });
-
+    div.addEventListener("click", () => openStatusViewer(userStatuses, 0));
     statusList.appendChild(div);
-
   });
-
 }
 
 
 // ==================== OPEN STATUS VIEWER ====================
 function openStatusViewer(statuses, index) {
-
   if (!statuses || statuses.length === 0) return;
 
   if (index >= statuses.length) {
@@ -1463,44 +1288,40 @@ function openStatusViewer(statuses, index) {
   currentViewingStatus = { statuses, index };
   const status = statuses[index];
 
-  const isMine = status.userId === currentUser.uid;
+  const isMine = status.user_id === currentUser.id;
 
-  viewerName.textContent = status.userName || "User";
-  viewerAvatar.textContent = initials(status.userName);
+  viewerName.textContent = status.user_name || "User";
+  viewerAvatar.textContent = initials(status.user_name);
 
-  if (status.createdAt) {
-    viewerTime.textContent = timeAgo(status.createdAt.toDate());
+  if (status.created_at) {
+    viewerTime.textContent = timeAgo(new Date(status.created_at));
   }
 
-  // Content
   statusContent.innerHTML = "";
 
-  if (status.type === "image" && status.imageUrl) {
+  if (status.type === "image" && status.image_url) {
     const img = document.createElement("img");
-    img.src = status.imageUrl;
+    img.src = status.image_url;
     img.alt = "status";
     statusContent.appendChild(img);
   } else {
     const div = document.createElement("div");
     div.className = "status-text";
-    div.style.background = status.bgColor || "#2563eb";
+    div.style.background = status.bg_color || "#2563eb";
     div.textContent = status.text || "";
     statusContent.appendChild(div);
   }
 
-  // Owner controls
   if (isMine) {
     statusOwnerBar.classList.remove("hidden");
     statusViewerBar.classList.add("hidden");
-
     viewerCount.textContent = (status.viewers || []).length;
     likeCount.textContent = (status.likes || []).length;
   } else {
     statusOwnerBar.classList.add("hidden");
     statusViewerBar.classList.remove("hidden");
 
-    // Check if liked
-    const isLiked = (status.likes || []).includes(currentUser.uid);
+    const isLiked = (status.likes || []).includes(currentUser.id);
     if (isLiked) {
       likeStatusBtn.classList.add("liked");
       likeStatusBtn.textContent = "❤️ Liked";
@@ -1509,63 +1330,44 @@ function openStatusViewer(statuses, index) {
       likeStatusBtn.textContent = "❤️ Like";
     }
 
-    // Mark as viewed
     markStatusViewed(status.id);
-
   }
 
-  // Show viewer
   statusViewer.classList.remove("hidden");
 
-  // Progress bar animation — reset
   const bar = document.getElementById("statusProgress");
   bar.style.animation = "none";
   void bar.offsetWidth;
   bar.style.animation = "";
 
-  // Auto-next after 5 sec
   if (statusTimeout) clearTimeout(statusTimeout);
-  statusTimeout = setTimeout(() => {
-    nextStatus();
-  }, 5000);
-
+  statusTimeout = setTimeout(() => nextStatus(), 5000);
 }
 
 
-// Close status viewer
 function closeStatusViewer() {
-
   if (statusTimeout) {
     clearTimeout(statusTimeout);
     statusTimeout = null;
   }
-
   statusViewer.classList.add("hidden");
   currentViewingStatus = null;
-
 }
 
 
-// Next status
 function nextStatus() {
-
   if (!currentViewingStatus) return;
-
   const { statuses, index } = currentViewingStatus;
-
   if (index + 1 < statuses.length) {
     openStatusViewer(statuses, index + 1);
   } else {
     closeStatusViewer();
   }
-
 }
 
 
-// Close viewer button
 closeViewer.addEventListener("click", closeStatusViewer);
 
-// Click on status content to skip to next
 statusContent.addEventListener("click", () => {
   nextStatus();
 });
@@ -1573,74 +1375,77 @@ statusContent.addEventListener("click", () => {
 
 // ==================== MARK STATUS VIEWED ====================
 async function markStatusViewed(statusId) {
-
   try {
+    const { data } = await supabase
+      .from("status")
+      .select("viewers")
+      .eq("id", statusId)
+      .single();
 
-    const ref = doc(db, "status", statusId);
-    const snap = await getDoc(ref);
+    const viewers = data?.viewers || [];
+    if (viewers.includes(currentUser.id)) return;
 
-    if (!snap.exists()) return;
-
-    const data = snap.data();
-    const viewers = data.viewers || [];
-
-    if (viewers.includes(currentUser.uid)) return;
-
-    await updateDoc(ref, {
-      viewers: arrayUnion(currentUser.uid)
-    });
+    await supabase
+      .from("status")
+      .update({ viewers: [...viewers, currentUser.id] })
+      .eq("id", statusId);
 
   } catch (err) {
     console.error("Mark viewed error:", err);
   }
-
 }
 
 
 // ==================== LIKE STATUS ====================
 likeStatusBtn.addEventListener("click", async () => {
-
   if (!currentViewingStatus) return;
 
   const { statuses, index } = currentViewingStatus;
   const status = statuses[index];
 
-  if (status.userId === currentUser.uid) return;
-
-  const statusId = status.id;
-  const isLiked = (status.likes || []).includes(currentUser.uid);
+  if (status.user_id === currentUser.id) return;
 
   try {
+    const { data } = await supabase
+      .from("status")
+      .select("likes")
+      .eq("id", status.id)
+      .single();
 
-    const ref = doc(db, "status", statusId);
+    const likes = data?.likes || [];
+    const isLiked = likes.includes(currentUser.id);
+
+    const newLikes = isLiked
+      ? likes.filter((x) => x !== currentUser.id)
+      : [...likes, currentUser.id];
+
+    await supabase
+      .from("status")
+      .update({ likes: newLikes })
+      .eq("id", status.id);
+
+    // Update local state so UI reflects instantly
+    status.likes = newLikes;
 
     if (isLiked) {
-      await updateDoc(ref, {
-        likes: arrayRemove(currentUser.uid)
-      });
+      likeStatusBtn.classList.remove("liked");
+      likeStatusBtn.textContent = "❤️ Like";
       showToast("💔 Like removed");
     } else {
-      await updateDoc(ref, {
-        likes: arrayUnion(currentUser.uid)
-      });
+      likeStatusBtn.classList.add("liked");
+      likeStatusBtn.textContent = "❤️ Liked";
       showToast("❤️ Liked!");
     }
 
   } catch (err) {
     console.error("Like error:", err);
   }
-
 });
 
 
 // ==================== VIEWERS / LIKES MODAL ====================
-ownerViewersBtn.addEventListener("click", () => {
-  showViewersModal("viewers");
-});
-
-ownerLikesBtn.addEventListener("click", () => {
-  showViewersModal("likes");
-});
+ownerViewersBtn.addEventListener("click", () => showViewersModal("viewers"));
+ownerLikesBtn.addEventListener("click", () => showViewersModal("likes"));
 
 closeViewersModal.addEventListener("click", () => {
   viewersModal.classList.add("hidden");
@@ -1648,7 +1453,6 @@ closeViewersModal.addEventListener("click", () => {
 
 
 async function showViewersModal(type) {
-
   if (!currentViewingStatus) return;
 
   const { statuses, index } = currentViewingStatus;
@@ -1662,9 +1466,7 @@ async function showViewersModal(type) {
     ? `Viewers (${uids.length})`
     : `Likes (${uids.length})`;
 
-  viewersList.innerHTML =
-    `<p class="loading">Loading...</p>`;
-
+  viewersList.innerHTML = `<p class="loading">Loading...</p>`;
   viewersModal.classList.remove("hidden");
 
   if (uids.length === 0) {
@@ -1673,61 +1475,58 @@ async function showViewersModal(type) {
     return;
   }
 
-  viewersList.innerHTML = "";
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .in("uid", uids);
 
-  for (const uid of uids) {
-    try {
-      const snap = await getDoc(doc(db, "users", uid));
-      if (snap.exists()) {
-        const data = snap.data();
-        const div = document.createElement("div");
-        div.className = "viewer-item";
-        div.innerHTML = `
-          <div class="avatar">${initials(data.name)}</div>
-          <div class="viewer-item-info">
-            <strong>${safe(data.name || "User")}</strong>
-            <small>${safe(data.email || "")}</small>
-          </div>
-        `;
-        viewersList.appendChild(div);
-      }
-    } catch (err) {
-      console.error("Load viewer error:", err);
-    }
+    if (error) throw error;
+
+    viewersList.innerHTML = "";
+
+    (data || []).forEach((user) => {
+      const div = document.createElement("div");
+      div.className = "viewer-item";
+      div.innerHTML = `
+        <div class="avatar">${initials(user.name)}</div>
+        <div class="viewer-item-info">
+          <strong>${safe(user.name || "User")}</strong>
+          <small>${safe(user.email || "")}</small>
+        </div>
+      `;
+      viewersList.appendChild(div);
+    });
+
+  } catch (err) {
+    console.error("Load viewer error:", err);
+    viewersList.innerHTML = `<p class="loading">Load nahi ho paya.</p>`;
   }
-
 }
 
 
 // ==================== OWNER DELETE STATUS ====================
 ownerDeleteBtn.addEventListener("click", async () => {
-
   if (!currentViewingStatus) return;
 
   const { statuses, index } = currentViewingStatus;
   const status = statuses[index];
 
-  if (status.userId !== currentUser.uid) {
+  if (status.user_id !== currentUser.id) {
     showToast("❌ Ye aapka status nahi hai");
     return;
   }
 
-  const confirmDelete = confirm("Ye status delete karna hai?");
-  if (!confirmDelete) return;
+  if (!confirm("Ye status delete karna hai?")) return;
 
   try {
-
-    const { deleteDoc } = await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
-
-    await deleteDoc(doc(db, "status", status.id));
+    await supabase.from("status").delete().eq("id", status.id);
     showToast("✅ Status deleted");
     closeStatusViewer();
-
   } catch (err) {
     console.error("Delete status error:", err);
     showToast("❌ Delete fail hua");
   }
-
 });
 
 
