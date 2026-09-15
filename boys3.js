@@ -2,7 +2,7 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
 // ⚠️ YAHAN APNA SUPABASE URL AUR ANON KEY DAALO
-const SUPABASE_URL = "https://uqeeelnmmnkaosxvmoxb.supabase.co/rest/v1/";
+const SUPABASE_URL = "https://uqeeelnmmnkaosxvmoxb.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVxZWVlbG5tbW5rYW9zeHZtb3hiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0ODUxMDIsImV4cCI6MjEwNTA2MTEwMn0.I0VEgwZR7GSnBlVOMbH8vFqvRFcJ-sIxIb4KFQITNXo";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
